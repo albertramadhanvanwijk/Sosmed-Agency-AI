@@ -294,6 +294,7 @@ pre.mono {
 .loading.on { display: grid; }
 .loading .box { background: var(--panel); border: 1px solid var(--line); border-radius: 13px; padding: 26px 34px; text-align: center; min-width: 270px; box-shadow: var(--shadow); }
 .spin { width: 38px; height: 38px; margin: 0 auto 14px; border-radius: 50%; border: 3px solid rgba(59,130,246,.2); border-top-color: var(--accent-2); animation: spin .8s linear infinite; }
+.loading-spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(59, 130, 246, 0.3); border-top-color: #3B82F6; border-radius: 50%; animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .loading .msg { font-size: 13.5px; font-weight: 650; }
 .loading .sub { font-size: 11.5px; color: var(--dim); margin-top: 5px; line-height: 1.5; max-width: 320px; }

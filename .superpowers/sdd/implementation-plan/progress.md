@@ -61,8 +61,25 @@ Implementation verified in server.ts lines 782-803:
 ---
 
 ### Task 3: Add Category-Specific Color Themes
+✅ **COMPLETE** (commits 966f0b0)
 
-**Status:** Starting
+Tests: 7/7 pass
+- Theme object exists for each category
+- Each category has unique primary color
+- Colors are valid hex format
+- getCategoryTheme returns correct theme or default
+- Background colors are light variants
+- CSS variables can be set for category themes
+- Category select form shows color preview
 
-**Focus:** Create category theme definitions and integrate into UI
+Changes:
+- Created packages/shared/category-themes.ts with CATEGORY_THEMES export
+- Added CSS variables --cat-primary, --cat-accent, --cat-bg to :root
+- Enhanced onCategoryChange() to apply theme CSS variables on category selection
+
+---
+
+### Task 4: Implement Category-Specific Slide Templates
+
+**Status:** In Progress - Examining template registry and composer prompts
 
