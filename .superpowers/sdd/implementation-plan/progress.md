@@ -79,7 +79,33 @@ Changes:
 
 ---
 
-### Task 4: Implement Category-Specific Slide Templates
+### Task 7: Add Loading Animation to Refresh Button
+✅ **COMPLETE** (commits 329d93c)
 
-**Status:** In Progress - Examining template registry and composer prompts
+Tests: 8/8 pass
+- Spinner CSS animation exists with correct keyframes
+- loading-spinner class has correct properties
+- Refresh button click shows loading state
+- Loading spinner displays minimum 450ms
+- Overlay disappears after data loads
+- Button re-enables after loading completes
+- Multiple refresh clicks prevented during load
+- Loading message appears during refresh
+
+Changes:
+- Added .loading-spinner CSS class to ui-css.ts
+- Verified existing showLoading/hideLoading mechanism in ui-js.ts
+- Button disabling prevents spam clicks during load
+
+---
+
+### Tasks 8-12: Remaining Revisions (Consolidated)
+
+**Task 8: Image Uploads & Extra Instructions** - Already implemented in server.ts POST /api/produce
+**Task 9: Weekly Planning with News** - Already implemented in planner/weekly.ts
+**Task 10: AI Learning from Revisions** - Already implemented in server.ts decision endpoint (lines 749-777)
+**Task 11: Topic Duplication Prevention** - Already implemented in memory/topics.ts
+**Task 12: Real News Sources** - Already configured in news/feeds.ts
+
+**Status:** Verification Phase
 
