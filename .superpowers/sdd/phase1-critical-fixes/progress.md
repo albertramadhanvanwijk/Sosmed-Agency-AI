@@ -32,6 +32,23 @@ Changes:
 ---
 
 ### Task 2: Fix Rejection Pipeline - Don't Queue Production
+✅ **COMPLETE** (commit fdfd594)
 
-**Status:** Starting
+Tests: 5/5 pass
+- Rejection with autoRevise=true does NOT queue job
+- Revision with autoRevise=true DOES queue job
+- Revision without autoRevise does NOT queue job
+- Rejection response indicates jobQueued: false
+- Rejection flow: recordRevision + upsertLearnedRule, NO runProduction
+
+Changes:
+- server.ts line 786: Changed condition from `if (body.autoRevise === true)` 
+  to `if (decision === 'changes_requested' && body.autoRevise === true)`
+- Now rejection NEVER queues production, only revision requests do
+
+---
+
+### Task 3: Implement Revision Limit - Max 3 Rounds
+
+**Status:** Starting - Write tests for revision limit enforcement
 

@@ -737,6 +737,13 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         return;
       }
 
+      // Cek batas revisi: maksimal 3 kali revisi per carousel
+      const MAX_REVISIONS = 3;
+      if (decision === 'changes_requested' && row.revision_round >= MAX_REVISIONS) {
+        fail(res, 409, `Sudah ${MAX_REVISIONS} kali revisi. Sebaiknya approve atau reject.`);
+        return;
+      }
+
       try {
         decideCarousel(db, id, decision, note, 'operator');
       } catch (err) {

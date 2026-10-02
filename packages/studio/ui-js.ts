@@ -461,6 +461,13 @@ function openDetail(id) {
       bA.onclick = function () { decide(id, 'approved', bA); };
       act.appendChild(bA);
       var bR = el('button', 'btn warn', 'Minta Revisi');
+      const MAX_REVISIONS = 3;
+      if (c.revision_round >= MAX_REVISIONS) {
+        bR.disabled = true;
+        bR.title = `Sudah ${MAX_REVISIONS} kali revisi. Silakan approve atau reject.`;
+      } else if (c.revision_round > 0) {
+        bR.textContent = `Minta Revisi (${c.revision_round}/${MAX_REVISIONS})`;
+      }
       bR.onclick = function () { openReviseForm(id, 'changes_requested'); };
       act.appendChild(bR);
       var bX = el('button', 'btn bad', 'Tolak');
