@@ -296,7 +296,7 @@ function loadApprovals() {
       bR.onclick = function () { openReviseForm(c.id, 'changes_requested'); };
       row.appendChild(bR);
       var bX = el('button', 'btn sm bad', 'Tolak');
-      bX.onclick = function () { openReviseForm(c.id, 'rejected'); };
+      bX.onclick = function () { openRejectDialog(c.id); };
       row.appendChild(bX);
       box.appendChild(row);
       return box;
@@ -316,6 +316,34 @@ function decide(id, decision, btn) {
     loadApprovals();
     loadOverview(true);
     if (state.detailId === id) { openDetail(id); }
+  }).catch(function (e) { toast('Gagal: ' + e.message, 'bad'); });
+}
+
+function openRejectDialog(id) {
+  var c = state.carousels.filter(function (x) { return x.id === id; })[0];
+  if (!window.confirm('Tolak carousel ini: ' + (c ? (c.title || c.topic) : id) + '?')) return;
+  
+  var note = prompt('Alasan penolakan (opsional, minimal 5 karakter jika diisi):', '');
+  if (note === null) return; // User cancelled
+  note = (note || '').trim();
+  
+  // Validate if note was provided but too short
+  if (note.length > 0 && note.length < 5) {
+    alert('Alasan harus minimal 5 karakter jika diisi.');
+    return;
+  }
+  
+  var btn = null; // No button to animate for rejection
+  return busy(btn, 'Menolak carousel', 'Menyimpan…', function () {
+    return api('/api/carousels/' + id + '/decision', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ decision: 'rejected', note: note, autoRevise: false })
+    });
+  }).then(function () {
+    toast('Carousel ditolak' + (note ? ' dengan alasan.' : '.'), 'ok');
+    closeDrawer();
+    loadApprovals();
+    loadOverview(true);
   }).catch(function (e) { toast('Gagal: ' + e.message, 'bad'); });
 }
 
@@ -436,7 +464,7 @@ function openDetail(id) {
       bR.onclick = function () { openReviseForm(id, 'changes_requested'); };
       act.appendChild(bR);
       var bX = el('button', 'btn bad', 'Tolak');
-      bX.onclick = function () { openReviseForm(id, 'rejected'); };
+      bX.onclick = function () { openRejectDialog(id, 'rejected'); };
       act.appendChild(bX);
       inner.appendChild(act);
     } else {

@@ -728,8 +728,12 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       // menjadi bahan pembelajaran agen; tanpa catatan, kesalahan yang sama
       // akan terulang dan sistem tidak pernah menjadi lebih baik.
       const note = (body.note ?? '').trim();
-      if (decision !== 'approved' && note.length < 5) {
+      if (decision === 'changes_requested' && note.length < 5) {
         fail(res, 400, 'Catatan revisi wajib diisi (minimal 5 karakter) agar agen dapat mempelajarinya.');
+        return;
+      }
+      if (decision === 'rejected' && note.length > 0 && note.length < 5) {
+        fail(res, 400, 'Jika memberikan catatan penolakan, minimal 5 karakter.');
         return;
       }
 
