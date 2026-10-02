@@ -1,0 +1,26 @@
+# Dependensi
+node_modules/
+
+# Rahasia — JANGAN pernah di-commit
+.env
+.env.local
+.env.*.local
+
+# Hasil produksi lokal (PNG, PDF, ZIP). Tidak di-upload otomatis; sengaja
+# diabaikan git agar repositori tetap ringan.
+output/
+storage/
+
+# Laporan probe model (berisi info internal penyedia)
+packages/llm/probe-report.json
+
+# Basis data pengembangan lokal
+packages/studio/studio.db
+packages/studio/studio.db-*
+
+# Sampah OS / editor
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
