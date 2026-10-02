@@ -783,7 +783,8 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         // 3. Jalankan perbaikan bila diminta. Produksi ulang memakai catatan
         //    revisi sebagai permintaan khusus, sehingga hasilnya benar-benar
         //    menanggapi catatan itu — bukan sekadar mengulang produksi lama.
-        if (body.autoRevise === true) {
+        //    HANYA untuk changes_requested, BUKAN untuk rejected.
+        if (decision === 'changes_requested' && body.autoRevise === true) {
           const ratios = (body.ratios ?? ['ig_portrait']).filter((r): r is RatioProfile => r in RATIO_PROFILES);
           const newCarouselId = randomUUID();
           revised.newCarouselId = newCarouselId;

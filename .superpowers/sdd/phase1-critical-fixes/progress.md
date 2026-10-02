@@ -14,3 +14,24 @@ Phase 1: 3 critical business logic fixes untuk Studio
 
 ## Task Progress
 
+### Task 1: Fix Rejection Form - Remove Revision Requirements
+✅ **COMPLETE** (commit 6cdc125)
+
+Tests: 5/5 pass
+- Rejection without notes accepted by server
+- Rejection uses simple dialog (not form)
+- Rejection note is optional but stored if provided
+- Revision request MUST have notes, rejection MAY have notes
+- UI buttons trigger appropriate dialog/form
+
+Changes:
+- server.ts line 731-734: Updated validation to allow empty notes for rejection
+- ui-js.ts: Created openRejectDialog() function for rejection confirmation
+- ui-js.ts line 299, 467: Updated button handlers to call openRejectDialog for rejection
+
+---
+
+### Task 2: Fix Rejection Pipeline - Don't Queue Production
+
+**Status:** Starting
+
