@@ -27,6 +27,10 @@ export const STUDIO_CSS = `
   --r: 10px;
   --shadow: 0 4px 20px rgba(0,0,0,.4);
   --side-w: 232px;
+  /* Category theme variables - default to edukasi_trading */
+  --cat-primary: #3B82F6;
+  --cat-accent: #1E40AF;
+  --cat-bg: #EFF6FF;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }

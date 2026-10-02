@@ -859,7 +859,19 @@ function onCategoryChange() {
     market_info: 'Mengambil berita nyata terbaru secara otomatis.',
     market_outlook: 'Paling berisiko. Selalu dibingkai sebagai analisis skenario.'
   };
-  $('f-cat-hint').textContent = hints[$('f-cat').value] || '';
+  var themes = {
+    edukasi_trading: { primary: '#3B82F6', accent: '#1E40AF', bg: '#EFF6FF' },
+    edukasi_propfirm: { primary: '#A855F7', accent: '#7E22CE', bg: '#FAF5FF' },
+    jurnal_trading: { primary: '#F59E0B', accent: '#D97706', bg: '#FFFBEB' },
+    market_info: { primary: '#10B981', accent: '#047857', bg: '#ECFDF5' },
+    market_outlook: { primary: '#EF4444', accent: '#DC2626', bg: '#FEF2F2' }
+  };
+  var catKey = $('f-cat').value;
+  $('f-cat-hint').textContent = hints[catKey] || '';
+  var theme = themes[catKey] || themes.edukasi_trading;
+  document.documentElement.style.setProperty('--cat-primary', theme.primary);
+  document.documentElement.style.setProperty('--cat-accent', theme.accent);
+  document.documentElement.style.setProperty('--cat-bg', theme.bg);
 }
 
 function onCtaKindChange() {
