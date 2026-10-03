@@ -22,7 +22,7 @@ const FALLBACK_BY_ROLE: Record<SlideRole, string> = {
   example: 'concept-one-idea',
   checklist: 'checklist-numbered',
   recap: 'recap-takeaway',
-  cta: 'recap-takeaway',
+  cta: 'cta-action',
   disclaimer: 'disclaimer-note',
 };
 

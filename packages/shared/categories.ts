@@ -30,7 +30,7 @@ export const CATEGORIES: Record<CategoryKey, CategoryDefinition> = {
       { role: 'recap', purpose: 'Ringkas tiga poin utama dalam satu slide' },
       { role: 'cta', purpose: 'Ajakan menyimpan carousel dan mengikuti akun' },
     ],
-    preferredTemplates: ['hook-bold', 'concept-one-idea', 'checklist-numbered', 'recap-takeaway'],
+    preferredTemplates: ['hook-bold', 'concept-one-idea', 'checklist-numbered', 'recap-takeaway', 'cta-action'],
   },
 
   edukasi_propfirm: {
@@ -53,7 +53,7 @@ export const CATEGORIES: Record<CategoryKey, CategoryDefinition> = {
       { role: 'recap', purpose: 'Ringkasan aturan dalam satu slide' },
       { role: 'cta', purpose: 'Ajakan menyimpan sebagai rujukan' },
     ],
-    preferredTemplates: ['hook-bold', 'propfirm-rules-table', 'checklist-numbered', 'recap-takeaway'],
+    preferredTemplates: ['hook-bold', 'propfirm-rules-table', 'checklist-numbered', 'recap-takeaway', 'cta-action'],
   },
 
   jurnal_trading: {
@@ -76,7 +76,7 @@ export const CATEGORIES: Record<CategoryKey, CategoryDefinition> = {
       { role: 'cta', purpose: 'Ajakan berdiskusi di komentar' },
       { role: 'disclaimer', purpose: 'Penegasan bahwa ini catatan pribadi, bukan rekomendasi' },
     ],
-    preferredTemplates: ['hook-bold', 'journal-stat-tile', 'recap-takeaway'],
+    preferredTemplates: ['hook-bold', 'journal-stat-tile', 'recap-takeaway', 'cta-action'],
   },
 
   market_info: {
@@ -99,7 +99,7 @@ export const CATEGORIES: Record<CategoryKey, CategoryDefinition> = {
       { role: 'cta', purpose: 'Ajakan mengikuti untuk pembaruan' },
       { role: 'disclaimer', purpose: 'Penegasan ini laporan informasi, bukan rekomendasi' },
     ],
-    preferredTemplates: ['hook-bold', 'news-why-it-matters', 'checklist-numbered'],
+    preferredTemplates: ['hook-bold', 'news-why-it-matters', 'checklist-numbered', 'cta-action'],
   },
 
   market_outlook: {
@@ -122,7 +122,7 @@ export const CATEGORIES: Record<CategoryKey, CategoryDefinition> = {
       { role: 'recap', purpose: 'Ringkasan kondisi yang membatalkan analisis' },
       { role: 'disclaimer', purpose: 'Disclaimer lengkap: analisis skenario, bukan ajakan bertransaksi' },
     ],
-    preferredTemplates: ['hook-bold', 'scenario-outlook', 'recap-takeaway'],
+    preferredTemplates: ['hook-bold', 'scenario-outlook', 'recap-takeaway', 'cta-action'],
   },
 };
 

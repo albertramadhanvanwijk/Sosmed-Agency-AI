@@ -11,6 +11,7 @@ import {
   type TemplateContext,
   type TemplateDefinition,
 } from './base.ts';
+import { ctaAction } from './cta-action.ts';
 
 const { kicker, tableBlock, statTiles, checklist, visualBlock, paragraphs, emphasize, ctaBlock } = components;
 
@@ -292,5 +293,6 @@ export const TEMPLATE_LIST: TemplateDefinition[] = [
   scenarioOutlook,
   checklistNumbered,
   recapTakeaway,
+  ctaAction,
   disclaimerNote,
 ];
