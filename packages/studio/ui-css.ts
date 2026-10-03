@@ -295,7 +295,7 @@ table.tbl td.wrap { max-width: 320px; word-break: break-word; }
 .slide-zoom.on { display: flex; align-items: center; justify-content: center; }
 .slide-zoom .zoom-stage { position: relative; width: 100vw; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; }
 .slide-zoom .zoom-wrapper { position: relative; display: flex; align-items: center; justify-content: center; transform-origin: center center; transition: transform .18s; }
-.slide-zoom .zoom-frame { width: 540px; height: 675px; max-width: 80vw; max-height: 72vh; border: 0; background: #08111F; border-radius: 12px; box-shadow: 0 20px 50px rgba(0,0,0,.6); }
+.slide-zoom .zoom-frame { width: 1080px; height: 1350px; max-width: 90vw; max-height: 90vh; border: 0; background: #08111F; border-radius: 12px; box-shadow: 0 20px 50px rgba(0,0,0,.6); }
 .zoom-controls { position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; background: var(--panel-3); border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px; }
 .zoom-controls button { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); cursor: pointer; font-weight: 700; }
 .zoom-controls button:hover { border-color: var(--accent); }

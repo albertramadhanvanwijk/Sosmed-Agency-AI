@@ -466,8 +466,15 @@ function applyZoom() {
 }
 
 function zoomIn() { zoomState.level = Math.min(3, zoomState.level + 0.25); applyZoom(); }
-function zoomOut() { zoomState.level = Math.max(0.5, zoomState.level - 0.25); applyZoom(); }
-function zoomReset() { zoomState.level = 1; applyZoom(); }
+function zoomOut() { zoomState.level = Math.max(0.25, zoomState.level - 0.25); applyZoom(); }
+function zoomReset() { 
+  var vw = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
+  var vh = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0);
+  var slideW = 1080, slideH = 1350;
+  var maxW = vw * 0.9, maxH = vh * 0.9;
+  zoomState.level = Math.min(maxW / slideW, maxH / slideH, 1);
+  applyZoom(); 
+}
 function closeSlideZoom() { var m = $('slide-zoom'); if (m) m.classList.remove('on'); zoomReset(); }
 
 function navigateZoom(dir) {
@@ -485,7 +492,16 @@ function openSlideZoom(id, pos, slides) {
   zoomState.id = id; zoomState.pos = pos; zoomState.slides = slides ? slides.slice() : [];
   var m = $('slide-zoom'); var fr = $('zoom-frame'); if (!m || !fr) return;
   fr.src = '/preview/' + id + '/' + pos + '?ratio=ig_portrait';
-  zoomState.level = 1; zoomState.x = 0; zoomState.y = 0;
+
+  // Calculate initial fit-to-screen scale
+  var vw = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
+  var vh = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0);
+  var slideW = 1080, slideH = 1350;
+  var maxW = vw * 0.9, maxH = vh * 0.9;
+  var scale = Math.min(maxW / slideW, maxH / slideH, 1);
+  zoomState.level = scale;
+  zoomState.x = 0; zoomState.y = 0;
+
   m.classList.add('on');
   applyZoom();
   var thumbs = $('zoom-thumbs'); if (thumbs) {
