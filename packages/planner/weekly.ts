@@ -416,6 +416,35 @@ function buildStrategyNote(slots: PlanSlot[], extraInstructions?: string): strin
   return parts.join(' ');
 }
 
+/** Draf copy deterministik untuk satu slot — dipakai tanpa LLM agar rencana tetap murah (Item 10). */
+export function generateCopyDraft(topic: string, _categoryKey: CategoryKey): { hook: string; body: string; hashtags: string[]; cta: string } {
+  const hook = `${topic} — 3 hal yang wajib kamu tahu`;
+  const body = `Kali ini kita bahas "${topic}". Simak poin utamanya, contoh penerapannya, dan kesalahan umum yang perlu dihindari agar tidak mengulanginya. Simpan carousel ini agar mudah dibaca ulang.`;
+  const hashtags = ['#trading', '#edukasi', '#propdesk'];
+  const cta = 'Simpan & bagikan ke teman trader kamu.';
+  return { hook, body, hashtags, cta };
+}
+
+/** Menghasilkan draf copy untuk seluruh slot dalam rencana. */
+export function generateCopyDrafts(slots: PlanSlot[]): PlanSlot[] {
+  return slots.map((s) => ({
+    ...s,
+    copyDraft: generateCopyDraft(s.topic, s.categoryKey),
+    copyStatus: (s.copyStatus ?? 'draft') as PlanSlot['copyStatus'],
+  }));
+}
+
+/** Memperkaya rencana dengan draf copy di setiap slot (Item 10). Tidak memanggil LLM. */
+export function enrichPlanWithCopyDrafts(plan: WeeklyPlan): WeeklyPlan {
+  return { ...plan, slots: generateCopyDrafts(plan.slots) };
+}
+
+/** Membangun rencana lalu langsung memperkaya dengan draf copy. */
+export function buildWeeklyPlanWithCopy(opts: PlanOptions = {}): WeeklyPlan {
+  const plan = buildWeeklyPlan(opts);
+  return enrichPlanWithCopyDrafts(plan);
+}
+
 /** Mencetak rencana dalam bentuk tabel yang mudah dibaca. */
 export function formatPlan(plan: WeeklyPlan): string {
   const lines: string[] = [

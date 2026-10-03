@@ -149,7 +149,7 @@ export interface KnowledgeRow {
 
 const ORG_ID = 'org_default';
 const CLIENT_ID = 'client_default';
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 /**
  * Menghapus data contoh dari basis data.
@@ -497,6 +497,45 @@ export function openDb(dbPath: string): DatabaseSync {
       updated_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_jurnal_pair ON jurnal_trading_data(pair);
+
+    -- ---------------------------------------------------------------------
+    -- Data terstruktur untuk kategori market_outlook (Item 8)
+    -- ---------------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS market_outlook_data (
+      carousel_id TEXT PRIMARY KEY REFERENCES carousels(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      timeframe TEXT,
+      images TEXT NOT NULL DEFAULT '[]',
+      ctas TEXT NOT NULL DEFAULT '[]',
+      general_notes TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_outlook_timeframe ON market_outlook_data(timeframe);
+
+    CREATE TABLE IF NOT EXISTS market_outlook_images (
+      id TEXT PRIMARY KEY,
+      carousel_id TEXT NOT NULL REFERENCES carousels(id) ON DELETE CASCADE,
+      image_id TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_outlook_images_carousel ON market_outlook_images(carousel_id, sort_order);
+
+    CREATE TABLE IF NOT EXISTS carousel_ctas (
+      id TEXT PRIMARY KEY,
+      carousel_id TEXT NOT NULL REFERENCES carousels(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      headline TEXT NOT NULL,
+      detail TEXT,
+      promo_code TEXT,
+      valid_until TEXT,
+      community_name TEXT,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_ctas_carousel ON carousel_ctas(carousel_id, sort_order);
   `);
 
   // Migrasi skema bertahap (backward-compatible untuk DB yang sudah ada)
@@ -1091,6 +1130,126 @@ export function getJurnalTradingData(db: DatabaseSync, carouselId: string): Jurn
     markImageId: row.mark_image_id,
     performanceImageId: row.performance_image_id,
     pairImageId: row.pair_image_id,
+    generalNotes: row.general_notes,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Market Outlook helpers (Item 8)
+// ---------------------------------------------------------------------------
+
+export interface MarketOutlookImageEntry {
+  imageId: string;
+  description: string;
+  sortOrder: number;
+}
+
+export interface MarketOutlookCtaEntry {
+  kind: string;
+  headline: string;
+  detail?: string | null;
+  promoCode?: string | null;
+  validUntil?: string | null;
+  communityName?: string | null;
+  sortOrder?: number;
+}
+
+export interface MarketOutlookPayload {
+  title: string;
+  timeframe?: string | null;
+  images: MarketOutlookImageEntry[];
+  ctas: MarketOutlookCtaEntry[];
+  generalNotes?: string | null;
+}
+
+export function validateMarketOutlookPayload(p: unknown): { ok: boolean; error?: string } {
+  if (!p || typeof p !== 'object') return { ok: false, error: 'Payload harus objek.' };
+  const o = p as Record<string, unknown>;
+  if (typeof o.title !== 'string' || !o.title.trim()) return { ok: false, error: 'title wajib diisi.' };
+  if (o.timeframe !== undefined && o.timeframe !== null && typeof o.timeframe !== 'string') return { ok: false, error: 'timeframe harus string atau null.' };
+  if (!Array.isArray(o.images)) return { ok: false, error: 'images harus array.' };
+  for (const im of o.images as unknown[]) {
+    if (!im || typeof im !== 'object') return { ok: false, error: 'Image entry tidak valid.' };
+    const r = im as Record<string, unknown>;
+    if (typeof r.imageId !== 'string' || !r.imageId.trim()) return { ok: false, error: 'imageId wajib string.' };
+    if (typeof r.description !== 'string') return { ok: false, error: 'description harus string.' };
+    if (typeof r.sortOrder !== 'number') return { ok: false, error: 'sortOrder harus number.' };
+  }
+  if (o.ctas !== undefined && o.ctas !== null) {
+    if (!Array.isArray(o.ctas)) return { ok: false, error: 'ctas harus array.' };
+    for (const c of o.ctas as unknown[]) {
+      if (!c || typeof c !== 'object') return { ok: false, error: 'CTA tidak valid.' };
+      const r = c as Record<string, unknown>;
+      if (typeof r.kind !== 'string' || !r.kind.trim()) return { ok: false, error: 'cta kind wajib string.' };
+      if (typeof r.headline !== 'string' || !r.headline.trim()) return { ok: false, error: 'cta headline wajib string.' };
+    }
+  }
+  if (o.generalNotes !== undefined && o.generalNotes !== null && typeof o.generalNotes !== 'string') return { ok: false, error: 'generalNotes harus string atau null.' };
+  return { ok: true };
+}
+
+export function buildMarketOutlookExtraInstructions(payload: MarketOutlookPayload): string {
+  const lines: string[] = [];
+  lines.push(`Kategori: market_outlook — Judul: ${payload.title}.`);
+  if (payload.timeframe) lines.push(`Timeframe: ${payload.timeframe}.`);
+  lines.push('Instruksi wajib: susun 7 slide skenario (hook, konteks, skenario A, skenario B, risiko, recap, disclaimer). Bingkai sebagai skenario, bukan ajakan transaksi.');
+  if (payload.images.length > 0) {
+    lines.push('Galeri chart (urutan penting):');
+    payload.images
+      .slice()
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .forEach((im, i) => lines.push(`  ${i + 1}. [${im.imageId}] ${im.description}`));
+  } else {
+    lines.push('Galeri chart: (tidak ada upload — pakai analisis tekstual).');
+  }
+  if (payload.ctas.length > 0) {
+    lines.push('CTA:');
+    payload.ctas.forEach((c) => lines.push(`  - ${c.kind}: ${c.headline}${c.detail ? ` — ${c.detail}` : ''}${c.promoCode ? ` [kode: ${c.promoCode}]` : ''}`));
+  }
+  if (payload.generalNotes) lines.push(`Catatan umum: ${payload.generalNotes}`);
+  lines.push('Aturan: sebutkan tingkat invalidasi & manajemen risiko; disclaimer skenario wajib di akhir.');
+  return lines.join('\n');
+}
+
+export function saveMarketOutlookData(db: DatabaseSync, carouselId: string, payload: MarketOutlookPayload): void {
+  const v = validateMarketOutlookPayload(payload);
+  if (!v.ok) throw new Error(v.error);
+  const now = new Date().toISOString();
+  db.prepare(
+    `INSERT INTO market_outlook_data (carousel_id, title, timeframe, images, ctas, general_notes, created_at, updated_at)
+     VALUES (?,?,?,?,?,?,?,?)
+     ON CONFLICT(carousel_id) DO UPDATE SET title=excluded.title, timeframe=excluded.timeframe, images=excluded.images, ctas=excluded.ctas, general_notes=excluded.general_notes, updated_at=excluded.updated_at`
+  ).run(carouselId, payload.title, payload.timeframe ?? null, JSON.stringify(payload.images), JSON.stringify(payload.ctas), payload.generalNotes ?? null, now, now);
+  // Sync child tables (best-effort)
+  try {
+    db.prepare('DELETE FROM market_outlook_images WHERE carousel_id = ?').run(carouselId);
+    const insImg = db.prepare('INSERT INTO market_outlook_images (id, carousel_id, image_id, description, sort_order, created_at) VALUES (?,?,?,?,?,?)');
+    for (const im of payload.images) {
+      insImg.run(`${carouselId}_img_${im.sortOrder}_${Math.random().toString(36).slice(2, 6)}`, carouselId, im.imageId, im.description, im.sortOrder, now);
+    }
+  } catch { /* ignore child sync errors */ }
+  try {
+    db.prepare('DELETE FROM carousel_ctas WHERE carousel_id = ?').run(carouselId);
+    const insCta = db.prepare('INSERT INTO carousel_ctas (id, carousel_id, kind, headline, detail, promo_code, valid_until, community_name, sort_order, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)');
+    for (let i = 0; i < payload.ctas.length; i++) {
+      const c = payload.ctas[i]!;
+      insCta.run(`${carouselId}_cta_${i}_${Math.random().toString(36).slice(2, 6)}`, carouselId, c.kind, c.headline, c.detail ?? null, c.promoCode ?? null, c.validUntil ?? null, c.communityName ?? null, c.sortOrder ?? i, now);
+    }
+  } catch { /* ignore */ }
+}
+
+export function getMarketOutlookData(db: DatabaseSync, carouselId: string): MarketOutlookPayload | null {
+  const row = db
+    .prepare('SELECT title, timeframe, images, ctas, general_notes FROM market_outlook_data WHERE carousel_id = ?')
+    .get(carouselId) as
+    | { title: string; timeframe: string | null; images: string; ctas: string; general_notes: string | null }
+    | undefined;
+  if (!row) return null;
+  return {
+    title: row.title,
+    timeframe: row.timeframe,
+    images: JSON.parse(row.images) as MarketOutlookImageEntry[],
+    ctas: JSON.parse(row.ctas) as MarketOutlookCtaEntry[],
     generalNotes: row.general_notes,
   };
 }

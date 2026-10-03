@@ -15,6 +15,9 @@ export interface CategoryTheme {
   accent: string;
   bg: string;
   name: string;
+  borderStyle: 'solid' | 'dashed' | 'double' | 'dotted' | 'gradient';
+  icon: string;
+  pattern: 'grid' | 'diagonal' | 'dots' | 'waves' | 'arrows';
 }
 
 export const CATEGORY_THEMES: Record<CategoryKey, CategoryTheme> = {
@@ -22,31 +25,46 @@ export const CATEGORY_THEMES: Record<CategoryKey, CategoryTheme> = {
     primary: '#3B82F6',
     accent: '#1E40AF',
     bg: '#EFF6FF',
-    name: 'Trading Education'
+    name: 'Trading Education',
+    borderStyle: 'solid',
+    icon: '📚',
+    pattern: 'grid'
   },
   edukasi_propfirm: {
     primary: '#A855F7',
     accent: '#7E22CE',
     bg: '#FAF5FF',
-    name: 'Prop Firm Education'
+    name: 'Prop Firm Education',
+    borderStyle: 'dashed',
+    icon: '🏢',
+    pattern: 'diagonal'
   },
   jurnal_trading: {
     primary: '#F59E0B',
     accent: '#D97706',
     bg: '#FFFBEB',
-    name: 'Trading Journal'
+    name: 'Trading Journal',
+    borderStyle: 'double',
+    icon: '📊',
+    pattern: 'dots'
   },
   market_info: {
     primary: '#10B981',
     accent: '#047857',
     bg: '#ECFDF5',
-    name: 'Market Info'
+    name: 'Market Info',
+    borderStyle: 'dotted',
+    icon: '📰',
+    pattern: 'waves'
   },
   market_outlook: {
     primary: '#EF4444',
     accent: '#DC2626',
     bg: '#FEF2F2',
-    name: 'Market Outlook'
+    name: 'Market Outlook',
+    borderStyle: 'gradient',
+    icon: '🎯',
+    pattern: 'arrows'
   }
 } as const;
 

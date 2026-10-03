@@ -92,7 +92,7 @@ import { NEWS_SOURCES } from '../news/feeds.ts';
 import { sourcesForCategory } from '../news/feeds.ts';
 import { fetchFeeds, fetchFeed } from '../news/rss.ts';
 import { selectRelevantNews } from '../news/select.ts';
-import { buildWeeklyPlan, formatPlan } from '../planner/weekly.ts';
+import { buildWeeklyPlan, formatPlan, enrichPlanWithCopyDrafts, generateCopyDraft } from '../planner/weekly.ts';
 import { checkSimilarity, similarityLevel, SIMILARITY_THRESHOLD, historyBrief, signatureFromSpec } from '../memory/topics.ts';
 import { inferRulesFromRevisions, mergeRules, memorySummary, rulesToPrompt, selectRules } from '../memory/rules.ts';
 import type { CallToAction, CarouselSpec, CategoryKey, RatioProfile, Slide, UploadedImage } from '../shared/types.ts';
@@ -691,6 +691,13 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       }
       const cat = getCategory(row.category_key);
       const jurnal = row.category_key === 'jurnal_trading' ? getJurnalTradingData(db, id) : null;
+      let marketOutlook: unknown = null;
+      if (row.category_key === 'market_outlook') {
+        try {
+          const { getMarketOutlookData } = await import('./db.ts');
+          marketOutlook = getMarketOutlookData(db, id);
+        } catch { /* ignore */ }
+      }
       json(res, 200, {
         ok: true,
         carousel: row,
@@ -707,8 +714,36 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         captions: getCaptions(db, id).map((c) => ({ ...c, hashtags: JSON.parse(c.hashtags) as string[] })),
         facts: getFacts(db, id),
         ...(jurnal ? { jurnalTrading: jurnal } : {}),
+        ...(marketOutlook ? { marketOutlook } : {}),
       });
       return;
+    }
+
+    // Item 8: Market Outlook endpoints
+    const outlookMatch = /^\/api\/market-outlook\/([^/]+)$/.exec(path);
+    if (outlookMatch) {
+      const cid = outlookMatch[1]!;
+      if (method === 'GET') {
+        try {
+          const { getMarketOutlookData: gmo } = await import('./db.ts');
+          const data = gmo(db, cid!);
+          json(res, 200, { ok: true, data });
+        } catch (e) { fail(res, 500, e instanceof Error ? e.message : String(e)); }
+        return;
+      }
+      if (method === 'PUT' || method === 'POST') {
+        const body = (await readJson(req)) as Record<string, unknown>;
+        try {
+          const { validateMarketOutlookPayload: vmo, saveMarketOutlookData: smo, buildMarketOutlookExtraInstructions: bmo } = await import('./db.ts');
+          const v = vmo(body);
+          if (!v.ok) { fail(res, 400, v.error ?? 'Payload tidak valid.'); return; }
+          smo(db, cid!, body as never);
+          const extra = bmo(body as never);
+          try { db.prepare('UPDATE carousels SET extra_instructions = ?, updated_at = ? WHERE id = ?').run(extra, new Date().toISOString(), cid); } catch { /* ignore */ }
+          json(res, 200, { ok: true, extraInstructions: extra });
+        } catch (e) { fail(res, 500, e instanceof Error ? e.message : String(e)); }
+        return;
+      }
     }
 
     const decisionMatch = /^\/api\/carousels\/([^/]+)\/decision$/.exec(path);
@@ -935,6 +970,8 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         ratios?: string[];
         fresh?: boolean;
         brandName?: string;
+        skipCopywriter?: boolean;
+        prebuiltCaptions?: { variants: { platform: string; hook: string; body: string; hashtags: string[]; cta: string }[]; recommendedIndex: number };
       };
       if (!body.categoryKey || !body.topic) {
         fail(res, 400, 'Perlu "categoryKey" dan "topic".');
@@ -964,18 +1001,33 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         } catch { /* ignore */ }
       }
 
+      // Item 8: jika market_outlook dan ada payload galeri/CTA, bangun extraInstructions dari Market Outlook
+      let outlookExtra: string | undefined;
+      if (body.categoryKey === 'market_outlook') {
+        try {
+          const maybeOutlook = (body as unknown as { marketOutlook?: unknown }).marketOutlook;
+          if (maybeOutlook) {
+            const { validateMarketOutlookPayload, buildMarketOutlookExtraInstructions } = await import('./db.ts');
+            const v = validateMarketOutlookPayload(maybeOutlook);
+            if (v.ok) outlookExtra = buildMarketOutlookExtraInstructions(maybeOutlook as never);
+          }
+        } catch { /* ignore */ }
+      }
+
       // Kembalikan respons lebih dulu, lalu produksi berjalan di latar
       // belakang. Antarmuka memantau kemajuannya lewat /api/jobs.
       json(res, 202, { ok: true, message: 'Produksi dimulai. Pantau di Command Center.' });
+      // Item 10: teruskan prebuiltCaptions/skipCopywriter agar pipeline dapat skip copywriter
+      const extraForProduce = [jurnalExtra, outlookExtra, (body as unknown as { extraInstructions?: string }).extraInstructions].filter(Boolean).join('\n\n') || undefined;
       runProduction({
         categoryKey: body.categoryKey,
         topic: body.topic,
         ratios,
         fresh: body.fresh === true,
         brandName: body.brandName ?? 'PropDesk',
-        ...(jurnalExtra || (body as unknown as { extraInstructions?: string }).extraInstructions
-          ? { extraInstructions: [jurnalExtra, (body as unknown as { extraInstructions?: string }).extraInstructions].filter(Boolean).join('\n\n') }
-          : {}),
+        ...(extraForProduce ? { extraInstructions: extraForProduce } : {}),
+        ...(body.prebuiltCaptions ? { prebuiltCaptions: body.prebuiltCaptions as never } : {}),
+        ...(body.skipCopywriter ? { skipCopywriter: true } : {}),
       }).catch((err) => {
         console.error('[produksi] gagal:', err instanceof Error ? err.message : err);
       });
@@ -1058,7 +1110,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         newsWarnings = result.outcomes.filter((o) => !o.ok).map((o) => `${o.sourceName}: ${o.error ?? 'gagal'}`);
       }
 
-      const plan = buildWeeklyPlan({
+      let plan = buildWeeklyPlan({
         ...(body.days ? { days: body.days } : {}),
         ...(body.startDate ? { startDate: body.startDate } : {}),
         ...(body.activeCategories && body.activeCategories.length > 0
@@ -1080,6 +1132,9 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       if (newsWarnings.length > 0) {
         plan.warnings.push(`${newsWarnings.length} sumber berita gagal diambil: ${newsWarnings.slice(0, 3).join('; ')}`);
       }
+
+      // Item 10: enrich every slot with copywriter draft (no LLM, cheap)
+      plan = enrichPlanWithCopyDrafts(plan);
 
       saveWeeklyPlan(db, plan);
       audit(db, 'operator', 'plan.created', 'weekly_plan', plan.id, {

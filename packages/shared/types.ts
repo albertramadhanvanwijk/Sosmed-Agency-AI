@@ -571,6 +571,14 @@ export interface SimilarityHit {
 // Rencana konten mingguan
 // ---------------------------------------------------------------------------
 
+/** Draf copy untuk satu slot rencana (Item 10). */
+export interface CopyDraft {
+  hook: string;
+  body: string;
+  hashtags: string[];
+  cta: string;
+}
+
 /** Satu slot konten dalam rencana mingguan. */
 export interface PlanSlot {
   /** Tanggal tayang yang disarankan, format YYYY-MM-DD. */
@@ -592,6 +600,10 @@ export interface PlanSlot {
   suggestedTime: string;
   /** Apakah slot ini untuk kategori yang butuh kebaruan tinggi. */
   timeSensitive: boolean;
+  /** Draf copy dari copywriter untuk slot ini (Item 10). */
+  copyDraft?: CopyDraft;
+  /** Status persetujuan copy: draft → approved → produksi skip copywriter. */
+  copyStatus?: 'draft' | 'approved' | 'needs_regeneration';
 }
 
 /** Rencana konten satu minggu. */

@@ -159,7 +159,10 @@ export function renderStudioHtml(config: StudioConfig): string {
         </div>
         <div class="card">
           <div class="card-h"><h2>Hasil Rencana</h2><span class="sub" id="plan-meta"></span></div>
-          <div class="card-b" id="plan-out"><div class="empty">Belum ada rencana. Klik "Susun Rencana".</div></div>
+          <div class="card-b">
+            <div class="hint" style="margin-bottom:8px">Copy preview (copywriter) tampil di tiap slot — setujui copy untuk lewati agen copywriter saat produksi (skip copywriter), atau regenerate bila perlu.</div>
+            <div id="plan-out"><div class="empty">Belum ada rencana. Klik "Susun Rencana".</div></div>
+          </div>
         </div>
       </section>
 
@@ -310,6 +313,35 @@ export function renderStudioHtml(config: StudioConfig): string {
                     <span id="j-save-msg" class="hint"></span>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <!-- Market Outlook structured input (hanya tampil saat kategori market_outlook) -->
+            <div id="market-outlook-panel" class="market-outlook-panel outlook-panel" style="display:none; margin-top:18px; padding:14px; border:1px solid var(--line); border-radius:12px; background: var(--cat-bg, #FEF2F2)">
+              <div class="fh" style="font-weight:700">Market Outlook — Input Terstruktur</div>
+              <div class="fd" style="margin-top:4px; color:var(--muted)">Judul, timeframe, galeri chart dengan deskripsi, dan CTA. Urutan galeri penting untuk narasi skenario.</div>
+              <div class="grid g3" style="margin-top:12px">
+                <div><label class="f">Judul Outlook *</label><input id="o-title" placeholder="mis. Skenario EUR/USD pekan depan" /></div>
+                <div><label class="f">Timeframe</label><select id="o-timeframe"><option value="">—</option><option>H1</option><option>H4</option><option>D1</option><option>W1</option><option>MN</option></select></div>
+                <div><label class="f">Catatan Umum (opsional)</label><input id="o-notes" placeholder="catatan skenario / disclaimer tambahan" /></div>
+              </div>
+              <div style="margin-top:12px">
+                <label class="f">Galeri Chart — upload beberapa gambar + deskripsi per gambar</label>
+                <div class="hint">Urutan gambar menentukan alur skenario A/B. Drag handle untuk reorder (atau pakai tombol ↑↓).</div>
+                <input type="file" id="o-files" accept="image/png,image/jpeg,image/webp,image/gif" multiple style="margin-top:6px" />
+                <div id="o-gallery" style="margin-top:10px; display:flex; flex-direction:column; gap:8px"></div>
+              </div>
+              <div style="margin-top:12px">
+                <label class="f">CTA (bisa banyak) — jenis: Link / Promo Code / Join Community</label>
+                <div id="o-ctas" style="display:flex; flex-direction:column; gap:8px; margin-top:6px"></div>
+                <div class="row" style="gap:8px; margin-top:8px">
+                  <button class="btn sm" id="o-cta-add">+ CTA</button>
+                  <button class="btn sm" id="o-cta-add-promo">+ Kode Promo</button>
+                </div>
+              </div>
+              <div class="row" style="gap:8px; margin-top:12px">
+                <button class="btn sm" id="o-save">Simpan Outlook</button>
+                <span id="o-save-msg" class="hint"></span>
               </div>
             </div>
 
@@ -465,6 +497,20 @@ export function renderStudioHtml(config: StudioConfig): string {
 
 <div class="backdrop" id="backdrop"></div>
 <div class="drawer" id="drawer"><button class="x" id="drawer-x">×</button><div class="drawer-i" id="drawer-i"></div></div>
+<div class="slide-zoom" id="slide-zoom">
+  <div class="zoom-stage" id="zoom-stage">
+    <iframe class="zoom-frame" id="zoom-frame" title="Slide zoom"></iframe>
+    <div class="zoom-info" id="zoom-info"></div>
+    <button class="zoom-close" id="zoom-close" title="Tutup (Esc)">×</button>
+    <div class="zoom-controls" id="zoom-controls">
+      <button id="zoom-out" title="Perkecil">−</button>
+      <button id="zoom-reset" title="Reset">◎</button>
+      <button id="zoom-in" title="Perbesar">＋</button>
+      <button id="zoom-download" title="Unduh">⤓</button>
+    </div>
+    <div class="zoom-thumbs" id="zoom-thumbs"></div>
+  </div>
+</div>
 <div class="loading" id="loading">
   <div class="box">
     <div class="spin"></div>

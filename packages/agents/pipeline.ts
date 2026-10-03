@@ -117,6 +117,10 @@ export interface ProduceRequest {
   /** Benar untuk melewati cache model dan meminta variasi baru. */
   fresh?: boolean;
   verbose?: boolean;
+  /** Caption yang sudah disetujui dari Weekly Plan (Item 10) — bila ada, copywriter dilewati. */
+  prebuiltCaptions?: CaptionSet;
+  /** Alias untuk kompatibilitas: skipCopywriter bila prebuiltCaptions tersedia. */
+  skipCopywriter?: boolean;
   /**
    * Dipanggil setiap sebuah langkah dimulai. Dipakai antarmuka Studio untuk
    * menampilkan kemajuan dan status agen di Virtual Agent Office secara nyata.
@@ -604,11 +608,17 @@ export async function produceCarousel(
   );
 
   // --- Langkah 3: Copywriter -----------------------------------------------
+  // Item 10: bila Weekly Plan sudah menyetujui copy (prebuiltCaptions), lewati pemanggilan LLM copywriter.
   const captions = await step(
     'caption',
     'copywriter',
     (c: CaptionSet) => `caption ${c.variants[0]?.body.length ?? 0} karakter, ${c.variants[0]?.hashtags.length ?? 0} hashtag`,
     async () => {
+      if (req.prebuiltCaptions) return req.prebuiltCaptions;
+      if (req.skipCopywriter) {
+        const stub = req.topic ? `${req.topic} — ringkasan disetujui` : 'Copy disetujui dari rencana';
+        return normalizeCaptions({ hook: stub.slice(0, 80), body: stub + ' '.repeat(40), hashtags: ['#trading', '#edukasi', '#propdesk'], cta: 'Simpan & bagikan.' });
+      }
       const { value } = await llm.callJson<{ hook: string; body: string; hashtags: string[]; cta: string }>(
         {
           taskClass: 'transform',

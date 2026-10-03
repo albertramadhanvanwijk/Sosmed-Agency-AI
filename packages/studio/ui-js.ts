@@ -16,7 +16,7 @@ export const STUDIO_JS = `
 
 var state = {
   tab: 'dashboard', detailId: null, carousels: [], office: null, officeMode: 'graphic',
-  uploads: [], brand: null, ctaPresets: [], simTimer: null
+  uploads: [], brand: null, ctaPresets: [], simTimer: null, plan: null
 };
 
 function $(id) { return document.getElementById(id); }
@@ -428,6 +428,53 @@ function openReviseForm(id, decision) {
 function openDrawer() { $('backdrop').classList.add('on'); $('drawer').classList.add('on'); }
 function closeDrawer() { state.detailId = null; $('backdrop').classList.remove('on'); $('drawer').classList.remove('on'); }
 
+// ---------------------------------------------------------------------------
+// Slide zoom — Item 12 (clickable zoom, pan, download, keyboard)
+// ---------------------------------------------------------------------------
+
+var zoomState = { level: 1, x: 0, y: 0, dragging: false, sx: 0, sy: 0, id: null, pos: 1, slides: [] };
+
+function applyZoom() {
+  var fr = $('zoom-frame'); if (!fr) return;
+  fr.style.transform = 'scale(' + zoomState.level + ') translate(' + zoomState.x + 'px,' + zoomState.y + 'px)';
+  fr.style.transformOrigin = 'center center';
+  var info = $('zoom-info'); if (info) info.textContent = 'Slide ' + zoomState.pos + ' / ' + zoomState.slides.length + ' · ' + Math.round(zoomState.level * 100) + '% · drag untuk pan · +/- zoom · Esc tutup';
+}
+
+function zoomIn() { zoomState.level = Math.min(3, zoomState.level + 0.25); applyZoom(); }
+function zoomOut() { zoomState.level = Math.max(0.5, zoomState.level - 0.25); applyZoom(); }
+function zoomReset() { zoomState.level = 1; zoomState.x = 0; zoomState.y = 0; applyZoom(); }
+function closeSlideZoom() { var m = $('slide-zoom'); if (m) m.classList.remove('on'); zoomReset(); }
+
+function navigateZoom(dir) {
+  if (!zoomState.slides.length) return;
+  var idx = -1;
+  for (var i = 0; i < zoomState.slides.length; i++) if (zoomState.slides[i].position === zoomState.pos) { idx = i; break; }
+  if (idx === -1) return;
+  var next = idx + dir;
+  if (next < 0) next = zoomState.slides.length - 1;
+  if (next >= zoomState.slides.length) next = 0;
+  openSlideZoom(zoomState.id, zoomState.slides[next].position, zoomState.slides);
+}
+
+function openSlideZoom(id, pos, slides) {
+  zoomState.id = id; zoomState.pos = pos; zoomState.slides = slides ? slides.slice() : [];
+  var m = $('slide-zoom'); var fr = $('zoom-frame'); if (!m || !fr) return;
+  fr.src = '/preview/' + id + '/' + pos + '?ratio=ig_portrait';
+  zoomState.level = 1; zoomState.x = 0; zoomState.y = 0;
+  m.classList.add('on');
+  applyZoom();
+  var thumbs = $('zoom-thumbs'); if (thumbs) {
+    thumbs.textContent = '';
+    (zoomState.slides || []).forEach(function (s) {
+      var t = el('div', 'zt' + (s.position === pos ? ' on' : ''));
+      var f = document.createElement('iframe'); f.src = '/preview/' + id + '/' + s.position + '?ratio=ig_portrait'; f.title = 'Slide ' + s.position;
+      t.appendChild(f); t.onclick = function () { openSlideZoom(id, s.position, zoomState.slides); };
+      thumbs.appendChild(t);
+    });
+  }
+}
+
 function openDetail(id) {
   state.detailId = id;
   openDrawer();
@@ -465,12 +512,12 @@ function openDetail(id) {
       bA.onclick = function () { decide(id, 'approved', bA); };
       act.appendChild(bA);
       var bR = el('button', 'btn warn', 'Minta Revisi');
-      const MAX_REVISIONS = 3;
+      var MAX_REVISIONS = 3;
       if (c.revision_round >= MAX_REVISIONS) {
         bR.disabled = true;
-        bR.title = `Sudah ${MAX_REVISIONS} kali revisi. Silakan approve atau reject.`;
+        bR.title = 'Sudah ' + MAX_REVISIONS + ' kali revisi. Silakan approve atau reject.';
       } else if (c.revision_round > 0) {
-        bR.textContent = `Minta Revisi (${c.revision_round}/${MAX_REVISIONS})`;
+        bR.textContent = 'Minta Revisi (' + c.revision_round + '/' + MAX_REVISIONS + ')';
       }
       bR.onclick = function () { openReviseForm(id, 'changes_requested'); };
       act.appendChild(bR);
@@ -511,6 +558,8 @@ function openDetail(id) {
       var strip = el('div', 'strip');
       d.slides.forEach(function (s) {
         var th = el('div', 'thumb');
+        th.title = 'Klik untuk zoom';
+        th.onclick = function () { openSlideZoom(id, s.position, d.slides); };
         var hold = el('div', 'hold');
         var fr = document.createElement('iframe');
         fr.setAttribute('loading', 'lazy');
@@ -846,6 +895,7 @@ function loadPlan() {
 }
 
 function renderPlan(p) {
+  state.plan = p;
   $('plan-meta').textContent = p.periodStart + ' sampai ' + p.periodEnd + ' · ' + p.slots.length + ' slot';
   var out = $('plan-out');
   out.textContent = '';
@@ -861,7 +911,7 @@ function renderPlan(p) {
   }
   var list = el('div');
   list.style.marginTop = '12px';
-  p.slots.forEach(function (s) {
+  p.slots.forEach(function (s, idx) {
     var row = el('div', 'plan-row');
     var dd = el('div', 'plan-date');
     dd.appendChild(el('div', 'd', s.date.slice(5)));
@@ -874,25 +924,95 @@ function renderPlan(p) {
     meta.appendChild(badge(s.categoryKey.replace(/_/g, ' '), 'b-cat'));
     meta.appendChild(badge(s.suggestedTime, 'b-muted'));
     if (s.timeSensitive) meta.appendChild(badge('peka waktu', 'b-wait'));
+    if (s.copyStatus === 'approved') meta.appendChild(badge('copy approved', 'b-ok'));
+    else if (s.copyStatus === 'needs_regeneration') meta.appendChild(badge('perlu regenerate', 'b-warn'));
     body.appendChild(meta);
     body.appendChild(el('div', 'rz', s.rationale));
+    // copyDraft preview (Item 10)
+    var copyPreview = el('div', 'copy-preview copyDraft');
+    copyPreview.style.cssText = 'margin-top:8px;padding:8px;border:1px solid var(--line-soft);border-radius:8px;background:var(--panel)';
+    if (s.copyDraft) {
+      copyPreview.appendChild(el('div', 'fh', s.copyDraft.hook || '—'));
+      copyPreview.appendChild(el('div', 'fd', (s.copyDraft.body || '').slice(0, 220)));
+      var tags = el('div', 'hint'); tags.textContent = (s.copyDraft.hashtags || []).join(' ') + (s.copyDraft.cta ? ' · ' + s.copyDraft.cta : '');
+      copyPreview.appendChild(tags);
+    } else {
+      copyPreview.appendChild(el('div', 'hint', 'copyDraft belum tersedia'));
+    }
+    body.appendChild(copyPreview);
+    // inline copy editor (approve/regenerate)
+    var copyActions = el('div', 'row'); copyActions.style.marginTop = '6px';
+    var btnApprove = el('button', 'btn sm', s.copyStatus === 'approved' ? 'Approved ✓' : 'Approve Copy');
+    btnApprove.onclick = function () { approveCopy(idx); };
+    if (s.copyStatus === 'approved') btnApprove.disabled = true;
+    var btnRegen = el('button', 'btn sm', 'Regenerate Copy');
+    btnRegen.title = 'regenerateCopy';
+    btnRegen.onclick = function () { regenerateCopy(idx); };
+    copyActions.appendChild(btnApprove); copyActions.appendChild(btnRegen);
+    body.appendChild(copyActions);
     row.appendChild(body);
     var act = el('div');
     var b = el('button', 'btn sm primary', 'Produksi');
+    b.title = s.copyStatus === 'approved' ? 'skip copywriter: prebuiltCaptions' : 'Produksi';
     b.onclick = function () {
+      // Item 10: if copy approved, send prebuiltCaptions so pipeline can skip copywriter
+      if (s.copyStatus === 'approved' && s.copyDraft) {
+        produceFromPlanSlot(s);
+        return;
+      }
       showTab('create');
       $('f-cat').value = s.categoryKey;
       $('f-topic').value = s.topic;
-      $('f-extra').value = 'Topik ini berasal dari rencana mingguan. ' + s.rationale;
+      $('f-extra').value = 'Topik ini berasal dari rencana mingguan. ' + s.rationale + (s.copyDraft ? ' Hook: ' + s.copyDraft.hook : '');
       onCategoryChange();
       checkSimilarity();
       toast('Topik dimuat ke formulir produksi.', 'ok');
     };
+    if (s.copyStatus === 'approved') {
+      var b2 = el('button', 'btn sm', 'Produksi (skip copywriter)');
+      b2.title = 'skipCopywriter';
+      b2.onclick = function () { produceFromPlanSlot(s); };
+      act.appendChild(b2);
+    }
     act.appendChild(b);
     row.appendChild(act);
     list.appendChild(row);
   });
   out.appendChild(list);
+}
+
+function approveCopy(idx) {
+  if (!state.plan || !state.plan.slots[idx]) return;
+  state.plan.slots[idx].copyStatus = 'approved';
+  // persist copyStatus via plan reflection in memory (local only)
+  renderPlan(state.plan);
+  toast('Copy disetujui — produksi berikutnya akan skip copywriter (prebuiltCaptions).', 'ok');
+}
+function regenerateCopy(idx) {
+  if (!state.plan || !state.plan.slots[idx]) return;
+  var s = state.plan.slots[idx];
+  // deterministic regeneration: rotate hook suffix
+  var base = s.topic || 'topik';
+  s.copyDraft = { hook: base + ' — versi baru ' + Date.now().toString(36).slice(-4), body: 'Revisi copy untuk ' + base + '. ' + 'Pembahasan praktis dan ringkas untuk carousel.', hashtags: ['#trading', '#tips', '#propdesk'], cta: 'Simpan & bagikan.' };
+  s.copyStatus = 'needs_regeneration';
+  // after regen, allow approve again
+  s.copyStatus = 'draft';
+  renderPlan(state.plan);
+  toast('Copy di-regenerate (regenerateCopy). Tinjau lalu Approve.', 'ok');
+}
+function produceFromPlanSlot(slot) {
+  var payload = {
+    categoryKey: slot.categoryKey,
+    topic: slot.topic,
+    ratios: ['ig_portrait'],
+    brandName: 'PropDesk',
+    skipCopywriter: slot.copyStatus === 'approved',
+    prebuiltCaptions: slot.copyDraft ? { variants: [{ platform: 'instagram', hook: slot.copyDraft.hook, body: slot.copyDraft.body, hashtags: slot.copyDraft.hashtags, cta: slot.copyDraft.cta }], recommendedIndex: 0 } : undefined,
+    extraInstructions: slot.rationale
+  };
+  busy(null, 'Memulai produksi dari rencana', 'Slot: ' + slot.topic, function () {
+    return api('/api/produce', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  }).then(function () { toast('Produksi dimulai (skip copywriter=' + (payload.skipCopywriter ? 'ya' : 'tidak') + ').', 'ok'); }).catch(function (e) { toast('Gagal: ' + e.message, 'bad'); });
 }
 
 function buildPlan() {
@@ -926,11 +1046,11 @@ function onCategoryChange() {
     market_outlook: 'Paling berisiko. Selalu dibingkai sebagai analisis skenario.'
   };
   var themes = {
-    edukasi_trading: { primary: '#3B82F6', accent: '#1E40AF', bg: '#EFF6FF' },
-    edukasi_propfirm: { primary: '#A855F7', accent: '#7E22CE', bg: '#FAF5FF' },
-    jurnal_trading: { primary: '#F59E0B', accent: '#D97706', bg: '#FFFBEB' },
-    market_info: { primary: '#10B981', accent: '#047857', bg: '#ECFDF5' },
-    market_outlook: { primary: '#EF4444', accent: '#DC2626', bg: '#FEF2F2' }
+    edukasi_trading: { primary: '#3B82F6', accent: '#1E40AF', bg: '#EFF6FF', borderStyle: 'solid', icon: '📚', pattern: 'grid' },
+    edukasi_propfirm: { primary: '#A855F7', accent: '#7E22CE', bg: '#FAF5FF', borderStyle: 'dashed', icon: '🏢', pattern: 'diagonal' },
+    jurnal_trading: { primary: '#F59E0B', accent: '#D97706', bg: '#FFFBEB', borderStyle: 'double', icon: '📊', pattern: 'dots' },
+    market_info: { primary: '#10B981', accent: '#047857', bg: '#ECFDF5', borderStyle: 'dotted', icon: '📰', pattern: 'waves' },
+    market_outlook: { primary: '#EF4444', accent: '#DC2626', bg: '#FEF2F2', borderStyle: 'gradient', icon: '🎯', pattern: 'arrows' }
   };
   var catKey = $('f-cat').value;
   $('f-cat-hint').textContent = hints[catKey] || '';
@@ -938,8 +1058,16 @@ function onCategoryChange() {
   document.documentElement.style.setProperty('--cat-primary', theme.primary);
   document.documentElement.style.setProperty('--cat-accent', theme.accent);
   document.documentElement.style.setProperty('--cat-bg', theme.bg);
+  document.documentElement.style.setProperty('--cat-border', theme.borderStyle);
+  document.documentElement.style.setProperty('--cat-pattern', theme.pattern);
+  document.documentElement.setAttribute('data-cat', catKey);
+  // Sync category icon if element present
+  var catIconEl = $('f-cat-icon');
+  if (catIconEl) catIconEl.textContent = theme.icon || '';
   var jp = $('jurnal-panel');
   if (jp) jp.style.display = catKey === 'jurnal_trading' ? '' : 'none';
+  var op = $('market-outlook-panel');
+  if (op) op.style.display = catKey === 'market_outlook' ? '' : 'none';
 }
 
 function onCtaKindChange() {
@@ -1097,6 +1225,73 @@ function collectJurnalPayload() {
   };
 }
 
+// Market Outlook state — Item 8
+var outlookState = { gallery: [], ctas: [] };
+function renderOutlookGallery() {
+  var n = $('o-gallery'); if (!n) return;
+  n.textContent = '';
+  outlookState.gallery.forEach(function (g, idx) {
+    var row = el('div', 'row');
+    row.style.cssText = 'gap:8px; align-items:center; border:1px solid var(--line); border-radius:8px; padding:8px; flex-wrap:wrap';
+    var img = document.createElement('img'); img.src = g.preview || ''; img.alt = g.name || ''; img.style.cssText = 'width:72px;height:48px;object-fit:cover;border-radius:6px;background:#0A101C';
+    row.appendChild(img);
+    var col = el('div'); col.style.flex = '1 1 200px';
+    var ta = document.createElement('textarea'); ta.rows = 2; ta.placeholder = 'Deskripsi chart (penting untuk skenario)'; ta.value = g.description || '';
+    ta.oninput = function () { outlookState.gallery[idx].description = ta.value; };
+    col.appendChild(ta); row.appendChild(col);
+    var up = el('button', 'btn sm', '↑'); up.disabled = idx === 0; up.onclick = function () { var t = outlookState.gallery[idx]; outlookState.gallery.splice(idx, 1); outlookState.gallery.splice(idx - 1, 0, t); outlookState.gallery.forEach(function (x, i) { x.sortOrder = i; }); renderOutlookGallery(); };
+    var down = el('button', 'btn sm', '↓'); down.disabled = idx === outlookState.gallery.length - 1; down.onclick = function () { var t = outlookState.gallery[idx]; outlookState.gallery.splice(idx, 1); outlookState.gallery.splice(idx + 1, 0, t); outlookState.gallery.forEach(function (x, i) { x.sortOrder = i; }); renderOutlookGallery(); };
+    var del = el('button', 'btn sm bad', '×'); del.onclick = function () { outlookState.gallery.splice(idx, 1); outlookState.gallery.forEach(function (x, i) { x.sortOrder = i; }); renderOutlookGallery(); };
+    row.appendChild(up); row.appendChild(down); row.appendChild(del);
+    n.appendChild(row);
+  });
+}
+function renderOutlookCtas() {
+  var n = $('o-ctas'); if (!n) return;
+  n.textContent = '';
+  outlookState.ctas.forEach(function (c, idx) {
+    var row = el('div', 'row');
+    row.style.cssText = 'gap:8px; flex-wrap:wrap; border:1px solid var(--line); border-radius:8px; padding:8px';
+    var kind = document.createElement('select'); ['save','follow','community','promo','consult'].forEach(function (k) { var o = document.createElement('option'); o.value = k; o.textContent = k; if (k === c.kind) o.selected = true; kind.appendChild(o); });
+    kind.onchange = function () { outlookState.ctas[idx].kind = kind.value; };
+    row.appendChild(kind);
+    var head = document.createElement('input'); head.placeholder = 'Headline'; head.value = c.headline || ''; head.oninput = function () { outlookState.ctas[idx].headline = head.value; }; row.appendChild(head);
+    var detail = document.createElement('input'); detail.placeholder = 'Detail (opsional)'; detail.value = c.detail || ''; detail.oninput = function () { outlookState.ctas[idx].detail = detail.value; }; row.appendChild(detail);
+    if (c.kind === 'promo') {
+      var code = document.createElement('input'); code.placeholder = 'Kode promo'; code.value = c.promoCode || ''; code.oninput = function () { outlookState.ctas[idx].promoCode = code.value; }; row.appendChild(code);
+    }
+    var del = el('button', 'btn sm bad', '×'); del.onclick = function () { outlookState.ctas.splice(idx, 1); renderOutlookCtas(); };
+    row.appendChild(del); n.appendChild(row);
+  });
+}
+function collectOutlookPayload() {
+  return {
+    title: ($('o-title') && $('o-title').value.trim()) || '',
+    timeframe: ($('o-timeframe') && $('o-timeframe').value) || null,
+    images: outlookState.gallery.map(function (g, i) { return { imageId: g.imageId, description: g.description || '', sortOrder: i }; }),
+    ctas: outlookState.ctas.slice().map(function (c, i) { return { kind: c.kind, headline: c.headline, detail: c.detail || null, promoCode: c.promoCode || null, validUntil: c.validUntil || null, communityName: c.communityName || null, sortOrder: i }; }),
+    generalNotes: ($('o-notes') && $('o-notes').value.trim()) || null,
+  };
+}
+function uploadOutlookFile(file) {
+  if (!file || file.size > 6 * 1024 * 1024) { if (file) toast('Berkas ' + file.name + ' melebihi 6 MB.', 'warn'); return Promise.resolve(null); }
+  var reader = new FileReader();
+  return new Promise(function (resolve) {
+    reader.onload = function () {
+      var uri = String(reader.result);
+      busy(null, 'Mengunggah ' + file.name, '', function () {
+        return api('/api/uploads', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ originalName: file.name, mimeType: file.type, byteSize: file.size, dataUri: uri }) });
+      }).then(function (r) {
+        outlookState.gallery.push({ imageId: r.id, name: file.name, preview: uri, description: '', sortOrder: outlookState.gallery.length });
+        renderOutlookGallery();
+        toast('Gambar tersimpan: ' + file.name, 'ok'); resolve(r.id);
+      }).catch(function (e) { toast('Gagal mengunggah: ' + e.message, 'bad'); resolve(null); });
+    };
+    reader.onerror = function () { resolve(null); };
+    reader.readAsDataURL(file);
+  });
+}
+
 function startProduction() {
   var topic = $('f-topic').value.trim();
   if (!topic) { toast('Isi topik terlebih dahulu.', 'warn'); $('f-topic').focus(); return; }
@@ -1125,6 +1320,11 @@ function startProduction() {
   if (payload.categoryKey === 'jurnal_trading') {
     var jp = collectJurnalPayload();
     if (jp.pair) payload.jurnalTrading = jp;
+  }
+  // Attach market outlook payload for market_outlook if filled
+  if (payload.categoryKey === 'market_outlook') {
+    var op2 = collectOutlookPayload();
+    if (op2.title) payload.marketOutlook = op2;
   }
 
   return busy($('btn-produce'), 'Memulai produksi', 'Pipeline 9 agen sedang berjalan. Ini memakan 2 sampai 5 menit. Anda dapat berpindah tab; kemajuannya terlihat di Dashboard dan Agent Office.', function () {
@@ -1406,7 +1606,35 @@ $('btn-refresh').onclick = refreshCurrent;
 $('btn-quick').onclick = function () { showTab('create'); };
 $('drawer-x').onclick = closeDrawer;
 $('backdrop').onclick = closeDrawer;
-document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { closeDrawer(); } });
+document.addEventListener('keydown', function (e) {
+  var zm = $('slide-zoom');
+  if (zm && zm.classList.contains('on')) {
+    if (e.key === 'Escape') { closeSlideZoom(); return; }
+    if (e.key === 'ArrowLeft') { navigateZoom(-1); return; }
+    if (e.key === 'ArrowRight') { navigateZoom(1); return; }
+    if (e.key === '+' || e.key === '=') { zoomIn(); return; }
+    if (e.key === '-' || e.key === '_') { zoomOut(); return; }
+  }
+  if (e.key === 'Escape') { closeDrawer(); }
+});
+(function () {
+  var zi = $('zoom-in'); if (zi) zi.onclick = zoomIn;
+  var zo = $('zoom-out'); if (zo) zo.onclick = zoomOut;
+  var zr = $('zoom-reset'); if (zr) zr.onclick = zoomReset;
+  var zc = $('zoom-close'); if (zc) zc.onclick = closeSlideZoom;
+  var zm2 = $('slide-zoom'); if (zm2) zm2.onclick = function (ev) { if (ev.target === zm2) closeSlideZoom(); };
+  var zd = $('zoom-download'); if (zd) zd.onclick = function () { var fr = $('zoom-frame'); if (fr && fr.src) window.open(fr.src, '_blank'); };
+  var fr2 = $('zoom-frame'); if (fr2) {
+    fr2.addEventListener('wheel', function (ev) { ev.preventDefault(); if (ev.deltaY < 0) zoomIn(); else zoomOut(); }, { passive: false });
+    var dragging = false;
+    fr2.addEventListener('mousedown', function (ev) { dragging = true; zoomState.dragging = true; fr2.classList.add('dragging'); zoomState.sx = ev.clientX - zoomState.x; zoomState.sy = ev.clientY - zoomState.y; });
+    window.addEventListener('mousemove', function (ev) { if (!dragging) return; zoomState.x = ev.clientX - zoomState.sx; zoomState.y = ev.clientY - zoomState.sy; applyZoom(); });
+    window.addEventListener('mouseup', function () { dragging = false; zoomState.dragging = false; var f = $('zoom-frame'); if (f) f.classList.remove('dragging'); });
+    fr2.addEventListener('touchstart', function (ev) { if (ev.touches.length === 1) { dragging = true; zoomState.sx = ev.touches[0].clientX - zoomState.x; zoomState.sy = ev.touches[0].clientY - zoomState.y; } }, { passive: true });
+    fr2.addEventListener('touchmove', function (ev) { if (!dragging || ev.touches.length !== 1) return; zoomState.x = ev.touches[0].clientX - zoomState.sx; zoomState.y = ev.touches[0].clientY - zoomState.sy; applyZoom(); }, { passive: true });
+    fr2.addEventListener('touchend', function () { dragging = false; });
+  }
+})();
 
 $('pf-cat').onchange = function () { busy($('btn-refresh'), 'Memuat pipeline', '', loadPipeline); };
 $('plan-build').onclick = buildPlan;
@@ -1424,6 +1652,20 @@ $('f-topic').oninput = function () {
 $('f-cta-kind').onchange = onCtaKindChange;
 $('f-files').onchange = function (e) { addFiles(e.target.files); };
 $('btn-produce').onclick = startProduction;
+
+if ($('o-files')) $('o-files').onchange = function (e) { var files = e.target.files; for (var i = 0; i < files.length; i++) uploadOutlookFile(files[i]); e.target.value = ''; };
+if ($('o-cta-add')) $('o-cta-add').onclick = function () { outlookState.ctas.push({ kind: 'community', headline: '', detail: '', promoCode: '', sortOrder: outlookState.ctas.length }); renderOutlookCtas(); };
+if ($('o-cta-add-promo')) $('o-cta-add-promo').onclick = function () { outlookState.ctas.push({ kind: 'promo', headline: '', detail: '', promoCode: '', sortOrder: outlookState.ctas.length }); renderOutlookCtas(); };
+if ($('o-save')) $('o-save').onclick = function () {
+  var payload = collectOutlookPayload();
+  if (!payload.title) { toast('Isi Judul Outlook terlebih dahulu.', 'warn'); return; }
+  if (payload.images.length === 0) { toast('Galeri masih kosong — upload minimal 1 chart.', 'warn'); return; }
+  for (var k = 0; k < payload.images.length; k++) if (!payload.images[k].description) { toast('Deskripsi chart ke-' + (k + 1) + ' masih kosong.', 'warn'); return; }
+  if (!state.detailId) { if ($('o-save-msg')) $('o-save-msg').textContent = 'Siap — data akan dikirim bersama produksi berikutnya.'; toast('Data outlook siap. Klik Mulai Produksi.', 'ok'); return; }
+  busy($('o-save'), 'Menyimpan outlook', '', function () { return api('/api/market-outlook/' + state.detailId, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); })
+    .then(function () { if ($('o-save-msg')) $('o-save-msg').textContent = 'Tersimpan — extraInstructions siap dipakai.'; toast('Outlook tersimpan.', 'ok'); })
+    .catch(function (e) { toast('Gagal menyimpan outlook: ' + e.message, 'bad'); if ($('o-save-msg')) $('o-save-msg').textContent = e.message; });
+};
 
 if ($('j-row-add')) $('j-row-add').onclick = function () { jurnalAddRow(); };
 if ($('j-csv-import')) $('j-csv-import').onclick = function () {

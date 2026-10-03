@@ -161,6 +161,18 @@ label.f { display: block; font-size: 11px; color: var(--muted); font-weight: 700
 label.f::after { content: ' *'; color: var(--danger); font-weight: 800; }
 .hint { font-size: 11.5px; color: var(--dim); margin-top: 5px; line-height: 1.5; }
 
+/* Category theme patterns — Item 6 */
+.cat-pattern-grid { background-image: linear-gradient(var(--cat-primary) 1px, transparent 1px), linear-gradient(90deg, var(--cat-primary) 1px, transparent 1px); background-size: 14px 14px; opacity: .06; }
+.cat-pattern-diagonal { background: repeating-linear-gradient(135deg, var(--cat-primary) 0 1px, transparent 1px 12px); opacity: .07; }
+.cat-pattern-dots { background-image: radial-gradient(var(--cat-primary) 1.2px, transparent 1.2px); background-size: 12px 12px; opacity: .08; }
+.cat-pattern-waves { background: repeating-linear-gradient(0deg, transparent 0 8px, var(--cat-primary) 8px 9px); opacity: .06; }
+.cat-pattern-arrows { background-image: linear-gradient(45deg, transparent 48%, var(--cat-primary) 48% 52%, transparent 52%); background-size: 16px 16px; opacity: .07; }
+.cat-border-solid { border-style: solid; }
+.cat-border-dashed { border-style: dashed; }
+.cat-border-double { border-style: double; border-width: 3px; }
+.cat-border-dotted { border-style: dotted; }
+.cat-border-gradient { border-image: linear-gradient(90deg, var(--cat-primary), var(--cat-accent)) 1; }
+
 /* Tabel admin */
 table.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.tbl th {
@@ -188,7 +200,10 @@ table.tbl td.wrap { max-width: 320px; word-break: break-word; }
 
 /* ===================== KANTOR AGEN ===================== */
 
-.office-wrap { position: relative; overflow: hidden; background: #070C15; min-height: 620px; max-height: 690px; }
+#tab-office { max-width: 1280px; margin: 0 auto; }
+#tab-office > .card { max-width: 1280px; margin-left: auto; margin-right: auto; }
+.office-wrap { position: relative; overflow: hidden; background: #070C15; min-height: 620px; max-height: 690px; margin: 0 auto; display: grid; place-items: center; }
+.office-centered { max-width: 1280px; margin: 0 auto; width: 100%; }
 .stage { position: relative; width: 1760px; height: 800px; margin: 0 auto; transform-origin: top center; transform: scale(.78); }
 .iso-floor {
   position: absolute; left: 50%; top: 48%; width: 1700px; height: 1700px; margin: -850px 0 0 -850px;
@@ -270,9 +285,26 @@ table.tbl td.wrap { max-width: 320px; word-break: break-word; }
 
 .strip { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 10px; }
 .thumb { flex: 0 0 auto; width: 204px; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; background: #08111F; position: relative; }
+.thumb { cursor: pointer; }
 .thumb iframe { width: 1080px; height: 1350px; border: 0; transform: scale(.1888); transform-origin: top left; pointer-events: none; display: block; }
 .thumb .hold { width: 204px; height: 255px; }
 .thumb .cap { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(5,9,16,.92); padding: 4px 7px; font-size: 10.5px; color: var(--muted); display: flex; justify-content: space-between; }
+
+/* ===================== SLIDE ZOOM MODAL — Item 12 ===================== */
+.slide-zoom { position: fixed; inset: 0; z-index: 75; display: none; place-items: center; background: rgba(3,6,12,.88); }
+.slide-zoom.on { display: grid; }
+.slide-zoom .zoom-stage { position: relative; width: 92vw; height: 88vh; display: grid; place-items: center; overflow: hidden; }
+.slide-zoom .zoom-frame { width: 100%; height: 100%; border: 0; background: #08111F; border-radius: 10px; transition: transform .18s; cursor: grab; }
+.slide-zoom .zoom-frame.dragging { cursor: grabbing; }
+.zoom-controls { position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; background: var(--panel-3); border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px; }
+.zoom-controls button { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); cursor: pointer; font-weight: 700; }
+.zoom-controls button:hover { border-color: var(--accent); }
+.zoom-info { position: absolute; top: 14px; left: 14px; background: rgba(5,9,16,.85); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 11px; color: var(--muted); }
+.zoom-close { position: absolute; top: 14px; right: 14px; width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); cursor: pointer; font-size: 18px; }
+.zoom-thumbs { position: absolute; bottom: 62px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; overflow-x: auto; max-width: 90vw; padding: 6px; }
+.zoom-thumbs .zt { width: 48px; height: 60px; border: 2px solid transparent; border-radius: 6px; overflow: hidden; cursor: pointer; opacity: .6; }
+.zoom-thumbs .zt.on { border-color: var(--accent); opacity: 1; }
+.zoom-thumbs .zt iframe { width: 1080px; height: 1350px; border: 0; transform: scale(.044); transform-origin: top left; pointer-events: none; }
 
 .finding { border-left: 3px solid var(--warn); background: rgba(245,158,11,.055); border-radius: 0 8px 8px 0; padding: 10px 12px; margin-bottom: 8px; }
 .finding.block { border-left-color: var(--danger); background: rgba(239,68,68,.06); }
@@ -342,8 +374,9 @@ button.btn.loading-btn::after {
   .side-brand h1, .side-brand small, .side-nav .group, .side-nav button .tx, .side-foot { display: none; }
   .side-nav button { justify-content: center; }
   .main { margin-left: 60px; }
+  #tab-office { max-width: 100%; padding: 0 8px; }
+  .office-wrap { min-height: 420px; max-height: 440px; width: 100%; max-width: 100vw; }
   .stage { transform: scale(.44); }
-  .office-wrap { min-height: 420px; max-height: 440px; }
   .drawer { width: 100vw; }
 }
 `;
