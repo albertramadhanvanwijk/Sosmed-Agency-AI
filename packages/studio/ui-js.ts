@@ -1012,6 +1012,55 @@ function approveCopy(idx) {
   renderPlan(state.plan);
   toast('Copy disetujui — produksi berikutnya akan skip copywriter (prebuiltCaptions).', 'ok');
 }
+
+function openCopywriteDetail(idx) {
+  if (!state.plan || !state.plan.slots[idx]) return;
+  var s = state.plan.slots[idx];
+  openDrawer();
+  var inner = $('drawer-i');
+  inner.textContent = '';
+  
+  var t = el('h2', null, 'Detail Copywriting');
+  t.style.cssText = 'font-size:17px;margin-bottom:6px;padding-right:36px';
+  inner.appendChild(t);
+  inner.appendChild(el('div', 'hint', s.topic || '—'));
+  
+  if (!s.copyDraft) {
+    inner.appendChild(el('div', 'finding', 'Copywriting belum tersedia. Klik Regenerate Copy untuk membuat.'));
+    closeDrawer();
+    return;
+  }
+  
+  var copyDetail = el('div');
+  copyDetail.style.marginTop = '16px';
+  copyDetail.appendChild(el('label', 'f', 'Hook'));
+  copyDetail.appendChild(el('div', 'finding', s.copyDraft.hook || '—'));
+  
+  copyDetail.appendChild(el('label', 'f', 'Body'));
+  copyDetail.appendChild(el('div', 'finding', s.copyDraft.body || '—'));
+  
+  if (s.copyDraft.hashtags && s.copyDraft.hashtags.length > 0) {
+    copyDetail.appendChild(el('label', 'f', 'Hashtags'));
+    copyDetail.appendChild(el('div', 'finding', s.copyDraft.hashtags.join(' ')));
+  }
+  
+  if (s.copyDraft.cta) {
+    copyDetail.appendChild(el('label', 'f', 'CTA'));
+    copyDetail.appendChild(el('div', 'finding', s.copyDraft.cta));
+  }
+  
+  inner.appendChild(copyDetail);
+  
+  var row = el('div', 'row');
+  row.style.marginTop = '18px';
+  var bClose = el('button', 'btn', 'Tutup');
+  bClose.onclick = closeDrawer;
+  row.appendChild(bClose);
+  var bRegenHere = el('button', 'btn primary', 'Regenerate');
+  bRegenHere.onclick = function () { closeDrawer(); regenerateCopy(idx); renderPlan(state.plan); };
+  row.appendChild(bRegenHere);
+  inner.appendChild(row);
+}
 function regenerateCopy(idx) {
   if (!state.plan || !state.plan.slots[idx]) return;
   var s = state.plan.slots[idx];
