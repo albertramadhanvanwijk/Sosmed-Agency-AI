@@ -353,6 +353,20 @@ export function renderStudioHtml(config: StudioConfig): string {
               <div class="spacer"></div>
               <span id="produce-msg" style="font-size:12.5px;color:var(--muted)"></span>
             </div>
+
+            <!-- Loading modal overlay -->
+            <div class="produce-loading" id="produce-loading" style="display:none">
+              <div class="loading-backdrop"></div>
+              <div class="loading-modal">
+                <div class="loading-spinner"></div>
+                <h3 id="loading-title">Memulai produksi...</h3>
+                <p id="loading-sub">Pipeline 9 agen sedang berjalan. Ini memakan 2–5 menit.</p>
+                <div class="loading-progress">
+                  <div class="loading-bar" id="loading-bar"></div>
+                </div>
+                <p class="loading-hint" id="loading-hint">Anda akan diarahkan ke Dashboard saat selesai.</p>
+              </div>
+            </div>
           </div>
         </div>
       </section>

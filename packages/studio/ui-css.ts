@@ -347,6 +347,21 @@ button.btn.loading-btn::after {
 .toast.on { transform: translateX(-50%) translateY(0); opacity: 1; }
 .toast.ok { border-left-color: var(--ok); }
 .toast.bad { border-left-color: var(--danger); }
+
+/* ===================== PRODUCE LOADING MODAL ===================== */
+
+.produce-loading { position: fixed; inset: 0; z-index: 95; display: none; align-items: center; justify-content: center; background: rgba(3,6,12,.85); }
+.produce-loading.on { display: flex; }
+.produce-loading .loading-backdrop { position: absolute; inset: 0; background: rgba(3,6,12,.6); }
+.produce-loading .loading-modal { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 36px 44px; text-align: center; min-width: 360px; max-width: 90vw; box-shadow: var(--shadow-lg); animation: modalIn .25s ease-out; }
+@keyframes modalIn { from { opacity: 0; transform: translateY(16px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.produce-loading .loading-spinner { width: 48px; height: 48px; margin: 0 auto 18px; border: 4px solid rgba(59,130,246,.15); border-top-color: var(--accent-2); border-radius: 50%; animation: spin .8s linear infinite; }
+.produce-loading h3 { font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+.produce-loading p { font-size: 14px; color: var(--muted); line-height: 1.6; }
+.produce-loading .loading-progress { margin: 22px 0 16px; height: 6px; background: var(--panel-2); border-radius: 999px; overflow: hidden; }
+.produce-loading .loading-bar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent-2), var(--accent)); border-radius: 999px; transition: width .6s ease; animation: pulse 1.5s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .7; } }
+.produce-loading .loading-hint { font-size: 12px; color: var(--dim); margin: 0; }
 .toast.warn { border-left-color: var(--warn); }
 
 .similar { border: 1px solid rgba(245,158,11,.4); background: rgba(245,158,11,.07); border-radius: 9px; padding: 11px 13px; margin-top: 9px; }

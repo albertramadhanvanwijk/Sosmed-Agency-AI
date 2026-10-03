@@ -1416,20 +1416,86 @@ function startProduction() {
     if (op2.title) payload.marketOutlook = op2;
   }
 
-  return busy($('btn-produce'), 'Memulai produksi', 'Pipeline 9 agen sedang berjalan. Ini memakan 2 sampai 5 menit. Anda dapat berpindah tab; kemajuannya terlihat di Dashboard dan Agent Office.', function () {
+  // 1) Clear form immediately for responsive feel
+  clearProduceForm();
+
+  // 2) Show loading modal
+  var loadingEl = $('produce-loading');
+  if (loadingEl) loadingEl.classList.add('on');
+  animateLoadingBar();
+
+  return busy($('btn-produce'), 'Memulai produksi', '', function () {
     return api('/api/produce', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
   }).then(function () {
-    $('produce-msg').textContent = 'Produksi berjalan. Pantau di Dashboard.';
-    toast('Produksi dimulai. Hasilnya muncul di Dashboard saat selesai.', 'ok');
-    $('f-topic').value = '';
-    $('sim-warn').textContent = '';
-    state.uploads = [];
-    renderUploads();
+    // 3) Switch to dashboard tab
+    showTab('dashboard');
+    // 4) Hide loading modal
+    if (loadingEl) loadingEl.classList.remove('on');
+    resetLoadingBar();
+    toast('Produksi dimulai. Hasilnya muncul di Dashboard.', 'ok');
     pollUntilDone();
-  }).catch(function (e) { toast('Gagal memulai: ' + e.message, 'bad'); });
+  }).catch(function (e) {
+    if (loadingEl) loadingEl.classList.remove('on');
+    resetLoadingBar();
+    toast('Gagal memulai: ' + e.message, 'bad');
+  });
+}
+
+function clearProduceForm() {
+  $('f-topic').value = '';
+  $('f-extra').value = '';
+  $('f-cta-head').value = '';
+  $('f-cta-detail').value = '';
+  $('f-cta-code').value = '';
+  $('f-cta-valid').value = '';
+  $('f-cta-comm').value = '';
+  $('sim-warn').textContent = '';
+  state.uploads = [];
+  renderUploads();
+  // Clear jurnal trading fields
+  var jp = $('j-pair'); if (jp) jp.value = '';
+  var jtf = $('j-timeframe'); if (jtf) jtf.value = '';
+  var jcsv = $('j-table-csv'); if (jcsv) jcsv.value = '';
+  var jdir = $('j-dir-desc'); if (jdir) jdir.value = '';
+  var jexec = $('j-exec-desc'); if (jexec) jexec.value = '';
+  var jmark = $('j-mark-desc'); if (jmark) jmark.value = '';
+  var jperf = $('j-perf-file'); if (jperf) jperf.value = '';
+  var jnotes = $('j-general-notes'); if (jnotes) jnotes.value = '';
+  var jmsg = $('j-table-msg'); if (jmsg) jmsg.textContent = '';
+  var jsave = $('j-save-msg'); if (jsave) jsave.textContent = '';
+  // Clear market outlook fields
+  var ot = $('o-title'); if (ot) ot.value = '';
+  var otf = $('o-timeframe'); if (otf) otf.value = '';
+  var on = $('o-notes'); if (on) on.value = '';
+  var og = $('o-gallery'); if (og) og.textContent = '';
+  var octas = $('o-ctas'); if (octas) octas.textContent = '';
+  var osave = $('o-save-msg'); if (osave) osave.textContent = '';
+  // Reset category-specific panels
+  onCategoryChange();
+}
+
+function animateLoadingBar() {
+  var bar = $('loading-bar');
+  if (!bar) return;
+  bar.style.width = '0%';
+  var progress = 0;
+  var interval = setInterval(function () {
+    progress += Math.random() * 8 + 4; // 4-12% per tick
+    if (progress > 90) progress = 90;
+    bar.style.width = progress + '%';
+  }, 800);
+  bar.dataset.interval = interval;
+}
+
+function resetLoadingBar() {
+  var bar = $('loading-bar');
+  if (!bar) return;
+  clearInterval(bar.dataset.interval);
+  bar.style.width = '100%';
+  setTimeout(function () { bar.style.width = '0%'; }, 300);
 }
 
 var pollTimer = null;
