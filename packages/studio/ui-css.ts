@@ -204,7 +204,7 @@ table.tbl td.wrap { max-width: 320px; word-break: break-word; }
 #tab-office > .card { max-width: 1280px; margin-left: auto; margin-right: auto; }
 .office-wrap { position: relative; overflow: hidden; background: #070C15; min-height: 620px; max-height: 690px; margin: 0 auto; display: grid; place-items: center; }
 .office-centered { max-width: 1280px; margin: 0 auto; width: 100%; }
-.stage { position: relative; width: 1760px; height: 800px; margin: 0 auto; transform-origin: top center; transform: scale(.78); }
+.stage { position: relative; width: 1200px; height: 800px; margin: 0 auto; transform-origin: top center; transform: scale(.85); }
 .iso-floor {
   position: absolute; left: 50%; top: 48%; width: 1700px; height: 1700px; margin: -850px 0 0 -850px;
   transform: scale(1, .55) rotate(45deg);
