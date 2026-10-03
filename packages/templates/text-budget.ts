@@ -332,11 +332,12 @@ export function adjustBudgetForVisual(budget: TextBudget, visualType: string | u
 export function visualLimitsToPrompt(): string {
   return [
     '  - Tabel: maksimal 3 kolom dan 3 baris, setiap sel maksimal 26 karakter.',
-    '    Slide yang memuat tabel hanya boleh memuat teks pendek, maksimal separuh batas teks biasa.',
+    '    Slide yang memuat tabel TIDAK BOLEH memuat daftar poin. Isi pendek saja; pindahkan penjelasan ke slide berikutnya tanpa tabel.',
     '  - Kartu angka: maksimal 4 kartu, keterangan setiap kartu maksimal 22 karakter.',
-    '    Slide yang memuat kartu angka hanya boleh memuat teks pendek.',
-    '  - Bila ingin isi lebih lengkap, JANGAN menambah baris tabel: pecah menjadi dua slide —',
-    '    satu slide ringkas dengan tabel, satu slide penjelasan tanpa tabel.',
+    '    Slide yang memuat kartu angka TIDAK BOLEH memuat daftar poin. Kartu sudah memenuhi tinggi slide; bullets akan membuat teks meluap dan render GAGAL.',
+    '    Isi slide berkartu dibatasi ≤160 karakter; penjelasan tambahan pindah ke slide tanpa kartu.',
+    '  - Bila ingin isi lebih lengkap, JANGAN menambah baris tabel atau bullets ke slide yang sama: pecah menjadi dua slide —',
+    '    satu slide ringkas dengan visual, satu slide penjelasan tanpa visual.',
   ].join('\n');
 }
 

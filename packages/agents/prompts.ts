@@ -19,12 +19,12 @@ import type { CallToAction, CategoryDefinition, SlideRole } from '../shared/type
 import { visualLimitsToPrompt } from '../templates/text-budget.ts';
 
 /** Versi kumpulan prompt. Naikkan bila ada perubahan yang memengaruhi hasil. */
-export const PROMPT_VERSION = 3;
+export const PROMPT_VERSION = 5;
 
 /** Larangan yang berlaku untuk SEMUA agen yang menulis teks. */
 export const SHARED_PROHIBITIONS = `LARANGAN MUTLAK (melanggar salah satu membuat keluaran ditolak):
 1. Jangan menyatakan atau menyiratkan keuntungan pasti, dijamin, terjamin, atau tanpa risiko.
-2. Jangan menulis "pasti profit", "dijamin payout", "profit konsisten", "tanpa rugi", "bebas risiko".
+2. Jangan menulis "pasti profit", "dijamin payout", "profit konsisten", "tanpa rugi", "tanpa kerugian", "bebas risiko", "uang kasino", "house money" (semua varian berbahasa Indonesia maupun istilah asing). Bahkan konsep "uang profit yang aman untuk dirisikokan" WAJIB diungkapkan sebagai BIAS KELIRU: contoh yang benar adalah "Kesalahan umum: menganggap profit sebagai dana yang aman untuk dirisikokan — padahal setiap posisi baru tetap mengandung risiko kehilangan modal." Frasa "bebas risiko" tidak pernah boleh muncul, bahkan untuk menjelaskan kekeliruan.
 3. Jangan mengajak bertransaksi: "beli sekarang", "jual sekarang", "entry sekarang", "sinyal beli".
 4. Jangan mengajak menyetor dana: "deposit sekarang", "setor minimal", "join sekarang".
 5. Jangan mengklaim entitas "berlisensi", "terdaftar", atau "diawasi" otoritas mana pun tanpa dasar.
@@ -386,11 +386,11 @@ Keluarkan JSON dengan bentuk persis:
 Ketentuan tambahan:
 - "position" berurutan mulai dari 1 tanpa celah.
 - Nilai "role" harus salah satu dari: hook, body, example, checklist, recap, cta, disclaimer.
-- Setiap carousel WAJIB diakhiri satu slide dengan role "disclaimer".
+- Setiap carousel WAJIB diakhiri satu slide dengan role "disclaimer". Slide disclaimer HANYA berisi headline + body dari sistem; WAJIB: "bullets": [], "visual": {"type":"none"}, "sourceRefs": []. Jangan pernah mengisi bullets/visual pada disclaimer — itu pasti diblokir dan membuat render GAGAL.
 - "visual.type" harus salah satu dari: none, abstract_bg, chart_snapshot, table, stat_tile.
-- Untuk tabel, isi "visual" seperti: {"type":"table","table":{"columns":["A","B"],"rows":[{"cells":["1","2"]}]}} dengan maksimal 3 kolom dan 4 baris.
-- Untuk kartu angka, isi "visual" seperti: {"type":"stat_tile","stats":[{"label":"Win rate","value":"60%","note":"2 dari 3"}]} dengan maksimal 4 kartu.
-- Maksimal 6 butir "bullets" per slide.`;
+- Untuk tabel, isi "visual" seperti: {"type":"table","table":{"columns":["A","B"],"rows":[{"cells":["1","2"]}]}} dengan maksimal 3 kolom dan 3 baris. Slide bertabel TIDAK BOLEH memuat bullets maupun body panjang (≤160 karakter).
+- Untuk kartu angka, isi "visual" seperti: {"type":"stat_tile","stats":[{"label":"Win rate","value":"60%","note":"2 dari 3"}]} dengan maksimal 4 kartu. Slide berkartu (stat_tile) TIDAK BOLEH memuat bullets SAMA SEKALI — kartu + bullets selalu meluap dan membuat render GAGAL. Bila butuh bullets, buat slide terpisah tanpa kartu.
+- Maksimal 6 butir "bullets" per slide, tetapi slide yang memakai stat_tile, table, atau disclaimer harus 0 bullets.`;
 }
 
 // ---------------------------------------------------------------------------

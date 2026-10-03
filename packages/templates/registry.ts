@@ -61,6 +61,19 @@ export function resolveTemplate(slide: Slide): TemplateDefinition {
       }
     }
   }
+  // Visual tertentu punya template khusus yang harus diprioritaskan agar tidak
+  // menimbulkan overflow akibat penumpukan vertikal (kasus nyata: stat_tile +
+  // bullets pada concept-one-idea meluap 244px). Template khusus sudah dirancang
+  // tanpa bullets dan dengan jarak yang pas untuk visual tersebut.
+  const visualType = slide.visual?.type;
+  if (visualType === 'stat_tile') {
+    const stat = BY_SLUG.get('journal-stat-tile');
+    if (stat && (stat.supportedRoles.includes(slide.role) || slide.role === 'example' || slide.role === 'body')) return stat;
+  }
+  if (visualType === 'table') {
+    const tbl = BY_SLUG.get('propfirm-rules-table');
+    if (tbl && (tbl.supportedRoles.includes(slide.role) || slide.role === 'example' || slide.role === 'body')) return tbl;
+  }
   const byRole = TEMPLATE_LIST.find((t) => t.supportedRoles.includes(slide.role));
   if (byRole) return byRole;
   return getTemplate(FALLBACK_BY_ROLE[slide.role] ?? 'concept-one-idea');
@@ -122,6 +135,22 @@ export function validateSlide(slide: Slide, template: TemplateDefinition): Slide
   for (const [i, b] of slide.bullets.entries()) {
     if (b.length > template.limits.bulletChars) {
       at('bullets', `Poin #${i + 1} sepanjang ${b.length} karakter, melebihi ${template.limits.bulletChars}.`, 'warn');
+    }
+  }
+
+  // Penjaga tambahan: template yang tidak mendukung bullets tetapi dipakai bersama
+  // bullets pasti menimbulkan tumpukan vertikal. journal-stat-tile dan
+  // propfirm-rules-table dirancang tanpa bullets — bullets harus pindah ke slide lain.
+  if (template.limits.bullets === 0 && slide.bullets.length > 0) {
+    // Bila visual memang tipe khusus yang template-nya sudah dipilih dengan benar,
+    // ini adalah kesalahan struktur (bukan sekadar warn) karena pasti meluap.
+    const visualType = slide.visual?.type;
+    if (visualType === 'stat_tile' || visualType === 'table') {
+      at(
+        'structure',
+        `Template "${template.slug}" tidak mendukung daftar poin, tetapi slide memuat ${slide.bullets.length} poin bersama visual ${visualType}. Pindahkan poin ke slide tanpa ${visualType}.`,
+        'block',
+      );
     }
   }
 

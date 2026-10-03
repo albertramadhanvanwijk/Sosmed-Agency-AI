@@ -230,13 +230,21 @@ function validateVisualSize(slide: Slide): SlideValidationIssue[] {
         });
       }
     }
-    // Slide bertabel yang isinya masih panjang hampir pasti meluap.
+    // Slide bertabel yang isinya masih panjang atau memuat bullets hampir pasti meluap.
     const body = slide.body ?? '';
-    if (body.length > 180) {
+    if (body.length > 160) {
       issues.push({
         slidePosition: slide.position,
         field: 'body',
-        message: `Slide bertabel memuat isi ${body.length} karakter. Slide bertabel hanya muat isi pendek; pindahkan penjelasan ke slide berikutnya.`,
+        message: `Slide bertabel memuat isi ${body.length} karakter. Slide bertabel hanya muat isi pendek (≤120 karakter); pindahkan penjelasan ke slide berikutnya.`,
+        severity: 'block',
+      });
+    }
+    if (slide.bullets.length > 0) {
+      issues.push({
+        slidePosition: slide.position,
+        field: 'structure',
+        message: `Slide bertabel tidak boleh memuat daftar poin (${slide.bullets.length} poin). Tabel + bullets selalu meluap; pindahkan poin ke slide tanpa tabel.`,
         severity: 'block',
       });
     }
@@ -260,6 +268,27 @@ function validateVisualSize(slide: Slide): SlideValidationIssue[] {
           severity: 'warn',
         });
       }
+    }
+    // Kombinasi stat_tile + bullets selalu meluap vertikal: kartu mengisi ~40%
+    // tinggi body-wrap, bullets menambah ~250px. Kasus nyata slide 3 (3 kartu +
+    // 3 bullets + body 93 char) meluap 244px pada ig_portrait dan 99px pada square.
+    if (slide.bullets.length > 0) {
+      issues.push({
+        slidePosition: slide.position,
+        field: 'structure',
+        message: `Slide berkartu (stat_tile) tidak boleh memuat daftar poin (${slide.bullets.length} poin). Kartu + bullets selalu meluap; pindahkan poin ke slide terpisah tanpa kartu.`,
+        severity: 'block',
+      });
+    }
+    // Body panjang pada slide berkartu juga berisiko (kartu sudah memakai banyak ruang).
+    const bodyLen = (slide.body ?? '').length;
+    if (bodyLen > 180) {
+      issues.push({
+        slidePosition: slide.position,
+        field: 'body',
+        message: `Slide berkartu memuat isi ${bodyLen} karakter. Batasi ≤140 karakter bila memakai kartu, atau pindahkan penjelasan ke slide tanpa kartu.`,
+        severity: 'block',
+      });
     }
   }
 
@@ -716,6 +745,9 @@ export async function produceCarousel(
 
       // Pastikan slide disclaimer terisi otomatis dari brand kit, bukan dari
       // model. Teks kepatuhan tidak boleh bergantung pada kreativitas model.
+      // Model kerap menambahkan bullets/visual pada disclaimer walaupun template
+      // disclaimer-note tidak mendukungnya (limits bullets 0, body 700) — itu
+      // selalu diblokir validator dan membuat render GAGAL sebelum foto.
       const disclaimerText = disclaimers[disclaimerKey] ?? DEFAULT_DISCLAIMERS.default_finansial!;
       for (const slide of normalized) {
         if (slide.role === 'disclaimer') {
@@ -723,6 +755,42 @@ export async function produceCarousel(
             slide.headline = 'Sebelum Anda Mengambil Keputusan';
           }
           slide.body = disclaimerText;
+          // Sanitasi: disclaimer tidak boleh membawa bullets/visual/sourceRefs.
+          // Template disclaimer-note hanya merender headline + kotak disclaimer;
+          // bullets yang tersisa hanya membebani validasi dan meluap.
+          if (slide.bullets.length > 0) slide.bullets = [];
+          if (slide.visual && slide.visual.type !== 'none') slide.visual = { type: 'none' };
+          if (slide.sourceRefs.length > 0) slide.sourceRefs = [];
+          // Pertahankan hanya emphasis yang masih ada di headline/body disclaimer.
+          const haystack = `${slide.headline} ${slide.body ?? ''}`.toLowerCase();
+          slide.emphasis = slide.emphasis.filter((p) => haystack.includes(p.toLowerCase())).slice(0, 2);
+        }
+      }
+
+      // Sanitasi L2 deterministik: ganti frasa terlarang yang hampir pasti
+      // diblokir rule engine sebelum mencapai compliance. Ini bukan menggantikan
+      // rule engine — rule engine tetap menjadi gatekeeper — melainkan perbaikan
+      // preventif agar retry tidak gagal berulang dengan biaya yang sama.
+      const BANNED_REPLACEMENTS: [RegExp, string][] = [
+        [/\bbebas risiko\b/gi, 'dianggap aman padahal tetap berisiko'],
+        [/\buang kasino\b/gi, 'dana profit yang disalahartikan'],
+        [/\bhouse money\b/gi, 'dana profit yang disalahartikan'],
+        [/\btanpa kerugian\b/gi, 'tanpa merealisasikan kerugian'],
+      ];
+      for (const slide of normalized) {
+        for (const [re, replacement] of BANNED_REPLACEMENTS) {
+          let changed = false;
+          if (re.test(slide.headline)) { slide.headline = slide.headline.replace(re, replacement); changed = true; re.lastIndex = 0; }
+          if (slide.body && re.test(slide.body)) { slide.body = slide.body.replace(re, replacement); changed = true; re.lastIndex = 0; }
+          for (let i = 0; i < slide.bullets.length; i++) {
+            if (re.test(slide.bullets[i]!)) { slide.bullets[i] = slide.bullets[i]!.replace(re, replacement); changed = true; re.lastIndex = 0; }
+          }
+          if (changed) {
+            // Perbarui emphasis bila mengandung frasa yang diganti
+            for (let i = 0; i < slide.emphasis.length; i++) {
+              if (re.test(slide.emphasis[i]!)) { slide.emphasis[i] = slide.emphasis[i]!.replace(re, replacement); re.lastIndex = 0; }
+            }
+          }
         }
       }
       return normalized;
