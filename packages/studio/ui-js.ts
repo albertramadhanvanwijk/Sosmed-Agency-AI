@@ -460,14 +460,14 @@ var zoomState = { level: 1, x: 0, y: 0, dragging: false, sx: 0, sy: 0, id: null,
 
 function applyZoom() {
   var wr = $('zoom-wrapper'); if (!wr) return;
-  wr.style.transform = 'scale(' + zoomState.level + ') translate(' + zoomState.x + 'px,' + zoomState.y + 'px)';
-  wr.style.transformOrigin = '0 0';
-  var info = $('zoom-info'); if (info) info.textContent = 'Slide ' + zoomState.pos + ' / ' + zoomState.slides.length + ' · ' + Math.round(zoomState.level * 100) + '% · drag untuk pan · +/- zoom · Esc tutup';
+  wr.style.transform = 'scale(' + zoomState.level + ')';
+  wr.style.transformOrigin = 'center center';
+  var info = $('zoom-info'); if (info) info.textContent = 'Slide ' + zoomState.pos + ' / ' + zoomState.slides.length + ' · ' + Math.round(zoomState.level * 100) + '% · +/- zoom · Esc tutup';
 }
 
 function zoomIn() { zoomState.level = Math.min(3, zoomState.level + 0.25); applyZoom(); }
 function zoomOut() { zoomState.level = Math.max(0.5, zoomState.level - 0.25); applyZoom(); }
-function zoomReset() { zoomState.level = 1; zoomState.x = 0; zoomState.y = 0; applyZoom(); }
+function zoomReset() { zoomState.level = 1; applyZoom(); }
 function closeSlideZoom() { var m = $('slide-zoom'); if (m) m.classList.remove('on'); zoomReset(); }
 
 function navigateZoom(dir) {
@@ -1699,13 +1699,6 @@ document.addEventListener('keydown', function (e) {
   var zd = $('zoom-download'); if (zd) zd.onclick = function () { var fr = $('zoom-frame'); if (fr && fr.src) window.open(fr.src, '_blank'); };
   var wr = $('zoom-wrapper'); if (wr) {
     wr.addEventListener('wheel', function (ev) { ev.preventDefault(); if (ev.deltaY < 0) zoomIn(); else zoomOut(); }, { passive: false });
-    var dragging = false;
-    wr.addEventListener('mousedown', function (ev) { dragging = true; zoomState.dragging = true; wr.classList.add('dragging'); zoomState.sx = ev.clientX - zoomState.x; zoomState.sy = ev.clientY - zoomState.y; });
-    window.addEventListener('mousemove', function (ev) { if (!dragging) return; zoomState.x = ev.clientX - zoomState.sx; zoomState.y = ev.clientY - zoomState.sy; applyZoom(); });
-    window.addEventListener('mouseup', function () { dragging = false; zoomState.dragging = false; var w = $('zoom-wrapper'); if (w) w.classList.remove('dragging'); });
-    wr.addEventListener('touchstart', function (ev) { if (ev.touches.length === 1) { dragging = true; zoomState.sx = ev.touches[0].clientX - zoomState.x; zoomState.sy = ev.touches[0].clientY - zoomState.y; } }, { passive: true });
-    wr.addEventListener('touchmove', function (ev) { if (!dragging || ev.touches.length !== 1) return; zoomState.x = ev.touches[0].clientX - zoomState.sx; zoomState.y = ev.touches[0].clientY - zoomState.sy; applyZoom(); }, { passive: true });
-    wr.addEventListener('touchend', function () { dragging = false; });
   }
 })();
 

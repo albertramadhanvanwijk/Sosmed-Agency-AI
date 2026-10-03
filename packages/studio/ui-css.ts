@@ -291,12 +291,11 @@ table.tbl td.wrap { max-width: 320px; word-break: break-word; }
 .thumb .cap { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(5,9,16,.92); padding: 4px 7px; font-size: 10.5px; color: var(--muted); display: flex; justify-content: space-between; }
 
 /* ===================== SLIDE ZOOM MODAL — Item 12 ===================== */
-.slide-zoom { position: fixed; inset: 0; z-index: 75; display: none; place-items: center; background: rgba(3,6,12,.88); }
-.slide-zoom.on { display: grid; }
-.slide-zoom .zoom-stage { position: relative; width: 92vw; height: 88vh; overflow: auto; }
-.slide-zoom .zoom-wrapper { position: relative; transform-origin: top left; }
-.slide-zoom .zoom-frame { width: 1080px; height: 1350px; border: 0; background: #08111F; border-radius: 10px; pointer-events: none; }
-.slide-zoom .zoom-wrapper.dragging { cursor: grabbing; }
+.slide-zoom { position: fixed; inset: 0; z-index: 75; display: none; place-items: center; background: rgba(3,6,12,.92); }
+.slide-zoom.on { display: flex; align-items: center; justify-content: center; }
+.slide-zoom .zoom-stage { position: relative; width: 100vw; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; }
+.slide-zoom .zoom-wrapper { position: relative; display: flex; align-items: center; justify-content: center; transform-origin: center center; transition: transform .18s; }
+.slide-zoom .zoom-frame { width: 540px; height: 675px; max-width: 80vw; max-height: 72vh; border: 0; background: #08111F; border-radius: 12px; box-shadow: 0 20px 50px rgba(0,0,0,.6); }
 .zoom-controls { position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; background: var(--panel-3); border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px; }
 .zoom-controls button { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); cursor: pointer; font-weight: 700; }
 .zoom-controls button:hover { border-color: var(--accent); }
