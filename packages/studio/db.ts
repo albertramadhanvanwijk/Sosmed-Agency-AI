@@ -149,7 +149,7 @@ export interface KnowledgeRow {
 
 const ORG_ID = 'org_default';
 const CLIENT_ID = 'client_default';
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 /**
  * Menghapus data contoh dari basis data.
@@ -475,7 +475,58 @@ export function openDb(dbPath: string): DatabaseSync {
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_news_usage_carousel ON news_usage(carousel_id);
+
+    -- ---------------------------------------------------------------------
+    -- Data terstruktur untuk kategori jurnal_trading (Item 9)
+    -- ---------------------------------------------------------------------
+    CREATE TABLE IF NOT EXISTS jurnal_trading_data (
+      carousel_id TEXT PRIMARY KEY REFERENCES carousels(id) ON DELETE CASCADE,
+      pair TEXT NOT NULL,
+      timeframe TEXT,
+      trade_table TEXT NOT NULL DEFAULT '[]',
+      direction_desc TEXT NOT NULL DEFAULT '',
+      direction_image_id TEXT,
+      execution_desc TEXT NOT NULL DEFAULT '',
+      execution_image_id TEXT,
+      mark_desc TEXT NOT NULL DEFAULT '',
+      mark_image_id TEXT,
+      performance_image_id TEXT,
+      pair_image_id TEXT,
+      general_notes TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_jurnal_pair ON jurnal_trading_data(pair);
   `);
+
+  // Migrasi skema bertahap (backward-compatible untuk DB yang sudah ada)
+  try {
+    const vRow = db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get() as { value: string } | undefined;
+    const cur = vRow ? Number(vRow.value) : 0;
+    if (cur < 2) {
+      try { db.exec('ALTER TABLE carousels ADD COLUMN archived_at TEXT'); } catch { /* kolom sudah ada */ }
+      try { db.exec('ALTER TABLE carousels ADD COLUMN archive_reason TEXT'); } catch { /* kolom sudah ada */ }
+    }
+    if (cur < 3) {
+      // Pastikan kolom-kolom baru jurnal_trading_data ada bila DB lama sudah punya tabel versi minimal
+      try {
+        const cols = db.prepare("PRAGMA table_info(jurnal_trading_data)").all() as { name: string }[];
+        const names = new Set(cols.map((c) => c.name));
+        const adds: Record<string, string> = {
+          timeframe: 'ALTER TABLE jurnal_trading_data ADD COLUMN timeframe TEXT',
+          direction_image_id: 'ALTER TABLE jurnal_trading_data ADD COLUMN direction_image_id TEXT',
+          execution_image_id: 'ALTER TABLE jurnal_trading_data ADD COLUMN execution_image_id TEXT',
+          mark_image_id: 'ALTER TABLE jurnal_trading_data ADD COLUMN mark_image_id TEXT',
+          performance_image_id: 'ALTER TABLE jurnal_trading_data ADD COLUMN performance_image_id TEXT',
+          general_notes: 'ALTER TABLE jurnal_trading_data ADD COLUMN general_notes TEXT',
+        };
+        for (const [col, sql] of Object.entries(adds)) {
+          if (!names.has(col)) { try { db.exec(sql); } catch { /* ignore */ } }
+        }
+      } catch { /* tabel belum ada — akan dibuat oleh CREATE IF NOT EXISTS */ }
+    }
+    db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('schema_version', String(SCHEMA_VERSION));
+  } catch { /* jangan blokir openDb karena migrasi gagal */ }
 
   // Klien bawaan. Token merek disimpan sebagai JSON agar dapat diubah dari UI.
   const clientCount = db.prepare('SELECT count(*) AS n FROM clients').get() as { n: number };
@@ -490,7 +541,6 @@ export function openDb(dbPath: string): DatabaseSync {
       JSON.stringify({}),
       new Date().toISOString(),
     );
-    db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('schema_version', String(SCHEMA_VERSION));
   }
 
   return db;
@@ -908,6 +958,141 @@ export function buildArchiveFolderName(categoryKey: string, dateIso: string, rea
 export function updateCarouselFolder(db: DatabaseSync, id: string, folder: string): void {
   const now = new Date().toISOString();
   db.prepare('UPDATE carousels SET folder = ?, updated_at = ? WHERE id = ?').run(folder, now, id);
+}
+
+// ---------------------------------------------------------------------------
+// Jurnal Trading helpers (Item 9)
+// ---------------------------------------------------------------------------
+
+export interface JurnalTradeRow {
+  pairs: string;
+  direction: string;
+  session: string;
+  riskPct: string;
+  rr: string;
+  confluence: string;
+  pnl: string;
+  result: string;
+}
+
+export interface JurnalTradingPayload {
+  pair: string;
+  timeframe?: string | null;
+  tradeTable: JurnalTradeRow[];
+  directionDesc: string;
+  directionImageId?: string | null;
+  executionDesc: string;
+  executionImageId?: string | null;
+  markDesc: string;
+  markImageId?: string | null;
+  performanceImageId?: string | null;
+  pairImageId?: string | null;
+  generalNotes?: string | null;
+}
+
+export function validateJurnalTradingPayload(p: unknown): { ok: boolean; error?: string } {
+  if (!p || typeof p !== 'object') return { ok: false, error: 'Payload harus objek.' };
+  const o = p as Record<string, unknown>;
+  if (typeof o.pair !== 'string' || !o.pair.trim()) return { ok: false, error: 'pair wajib diisi.' };
+  if (!Array.isArray(o.tradeTable)) return { ok: false, error: 'tradeTable harus array.' };
+  for (const r of o.tradeTable as unknown[]) {
+    if (!r || typeof r !== 'object') return { ok: false, error: 'Baris trade tidak valid.' };
+    const row = r as Record<string, unknown>;
+    for (const k of ['pairs', 'direction', 'session', 'riskPct', 'rr', 'confluence', 'pnl', 'result']) {
+      if (typeof row[k] !== 'string') return { ok: false, error: `Field ${k} harus string.` };
+    }
+  }
+  for (const k of ['directionDesc', 'executionDesc', 'markDesc']) {
+    if (typeof o[k] !== 'string') return { ok: false, error: `${k} harus string.` };
+  }
+  for (const k of ['directionImageId', 'executionImageId', 'markImageId', 'performanceImageId', 'pairImageId', 'timeframe', 'generalNotes']) {
+    if (o[k] !== undefined && o[k] !== null && typeof o[k] !== 'string') return { ok: false, error: `${k} harus string atau null.` };
+  }
+  return { ok: true };
+}
+
+export function buildJurnalExtraInstructions(payload: JurnalTradingPayload): string {
+  const rows = payload.tradeTable
+    .map((r) => `- ${r.pairs} | ${r.direction} | ${r.session} | Risk ${r.riskPct} | RR ${r.rr} | Confluence: ${r.confluence} | PnL ${r.pnl} (${r.result})`)
+    .join('\n');
+  const lines: string[] = [];
+  lines.push(`Kategori: jurnal_trading — Pair utama: ${payload.pair}.`);
+  if (payload.timeframe) lines.push(`Timeframe: ${payload.timeframe}.`);
+  lines.push('Instruksi wajib: susun 7 slide dengan peran yang benar; jangan karang angka/claim tanpa sumber.');
+  lines.push('Tabel trade (sumber kebenaran, tampilkan apa adanya, jangan ringkas angkanya):');
+  lines.push(rows || '- (tidak ada baris trade)');
+  lines.push('');
+  lines.push(`Deskripsi Direction: ${payload.directionDesc}`);
+  lines.push(`Deskripsi Execution: ${payload.executionDesc}`);
+  lines.push(`Deskripsi Mark/Setup: ${payload.markDesc}`);
+  if (payload.generalNotes) lines.push(`Catatan umum: ${payload.generalNotes}`);
+  lines.push('Aturan: jaga akurasi pair, direction, PnL; CTA di akhir; disclaimer sesuai riskLevel.');
+  return lines.join('\n');
+}
+
+export function saveJurnalTradingData(db: DatabaseSync, carouselId: string, payload: JurnalTradingPayload): void {
+  const now = new Date().toISOString();
+  const v = validateJurnalTradingPayload(payload);
+  if (!v.ok) throw new Error(v.error);
+  db.prepare(
+    `INSERT INTO jurnal_trading_data (carousel_id, pair, timeframe, trade_table, direction_desc, direction_image_id, execution_desc, execution_image_id, mark_desc, mark_image_id, performance_image_id, pair_image_id, general_notes, created_at, updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+     ON CONFLICT(carousel_id) DO UPDATE SET pair=excluded.pair, timeframe=excluded.timeframe, trade_table=excluded.trade_table, direction_desc=excluded.direction_desc, direction_image_id=excluded.direction_image_id, execution_desc=excluded.execution_desc, execution_image_id=excluded.execution_image_id, mark_desc=excluded.mark_desc, mark_image_id=excluded.mark_image_id, performance_image_id=excluded.performance_image_id, pair_image_id=excluded.pair_image_id, general_notes=excluded.general_notes, updated_at=excluded.updated_at`
+  ).run(
+    carouselId,
+    payload.pair,
+    payload.timeframe ?? null,
+    JSON.stringify(payload.tradeTable),
+    payload.directionDesc,
+    payload.directionImageId ?? null,
+    payload.executionDesc,
+    payload.executionImageId ?? null,
+    payload.markDesc,
+    payload.markImageId ?? null,
+    payload.performanceImageId ?? null,
+    payload.pairImageId ?? null,
+    payload.generalNotes ?? null,
+    now,
+    now,
+  );
+}
+
+export function getJurnalTradingData(db: DatabaseSync, carouselId: string): JurnalTradingPayload | null {
+  const row = db
+    .prepare(
+      'SELECT pair, timeframe, trade_table, direction_desc, direction_image_id, execution_desc, execution_image_id, mark_desc, mark_image_id, performance_image_id, pair_image_id, general_notes FROM jurnal_trading_data WHERE carousel_id = ?'
+    )
+    .get(carouselId) as
+    | {
+        pair: string;
+        timeframe: string | null;
+        trade_table: string;
+        direction_desc: string;
+        direction_image_id: string | null;
+        execution_desc: string;
+        execution_image_id: string | null;
+        mark_desc: string;
+        mark_image_id: string | null;
+        performance_image_id: string | null;
+        pair_image_id: string | null;
+        general_notes: string | null;
+      }
+    | undefined;
+  if (!row) return null;
+  return {
+    pair: row.pair,
+    timeframe: row.timeframe,
+    tradeTable: JSON.parse(row.trade_table) as JurnalTradeRow[],
+    directionDesc: row.direction_desc,
+    directionImageId: row.direction_image_id,
+    executionDesc: row.execution_desc,
+    executionImageId: row.execution_image_id,
+    markDesc: row.mark_desc,
+    markImageId: row.mark_image_id,
+    performanceImageId: row.performance_image_id,
+    pairImageId: row.pair_image_id,
+    generalNotes: row.general_notes,
+  };
 }
 
 /** Ringkasan KPI untuk papan kendali. */

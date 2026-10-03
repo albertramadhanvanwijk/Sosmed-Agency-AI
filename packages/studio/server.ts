@@ -35,6 +35,7 @@ import {
   audit,
   buildApproveFolderName,
   buildArchiveFolderName,
+  buildJurnalExtraInstructions,
   createJob,
   decideCarousel,
   defaultDbPath,
@@ -71,9 +72,12 @@ import {
   saveUploadedImage,
   saveWeeklyPlan,
   seedDemoIfEmpty,
+  getJurnalTradingData,
+  saveJurnalTradingData,
   setLearnedRuleActive,
   updateJob,
   upsertLearnedRule,
+  validateJurnalTradingPayload,
 } from './db.ts';
 import { renderStudioHtml } from './ui.ts';
 import { LlmClient } from '../llm/client.ts';
@@ -686,6 +690,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         return;
       }
       const cat = getCategory(row.category_key);
+      const jurnal = row.category_key === 'jurnal_trading' ? getJurnalTradingData(db, id) : null;
       json(res, 200, {
         ok: true,
         carousel: row,
@@ -701,6 +706,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         runs: getAgentRuns(db, id),
         captions: getCaptions(db, id).map((c) => ({ ...c, hashtags: JSON.parse(c.hashtags) as string[] })),
         facts: getFacts(db, id),
+        ...(jurnal ? { jurnalTrading: jurnal } : {}),
       });
       return;
     }
@@ -944,6 +950,20 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         return;
       }
 
+      // Jika kategori jurnal_trading dan ada payload jurnal tersimpan untuk topic yang sama, inject sebagai extraInstructions
+      let jurnalExtra: string | undefined;
+      if (body.categoryKey === 'jurnal_trading' && typeof body.topic === 'string') {
+        // Cari jurnal data terbaru untuk topic/pair yang cocok (best-effort)
+        try {
+          // For now, if caller passed jurnal payload via extra field, prefer it; else skip
+          const maybeJurnal = (body as unknown as { jurnalTrading?: unknown }).jurnalTrading;
+          if (maybeJurnal) {
+            const v = validateJurnalTradingPayload(maybeJurnal);
+            if (v.ok) jurnalExtra = buildJurnalExtraInstructions(maybeJurnal as never);
+          }
+        } catch { /* ignore */ }
+      }
+
       // Kembalikan respons lebih dulu, lalu produksi berjalan di latar
       // belakang. Antarmuka memantau kemajuannya lewat /api/jobs.
       json(res, 202, { ok: true, message: 'Produksi dimulai. Pantau di Command Center.' });
@@ -953,6 +973,9 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         ratios,
         fresh: body.fresh === true,
         brandName: body.brandName ?? 'PropDesk',
+        ...(jurnalExtra || (body as unknown as { extraInstructions?: string }).extraInstructions
+          ? { extraInstructions: [jurnalExtra, (body as unknown as { extraInstructions?: string }).extraInstructions].filter(Boolean).join('\n\n') }
+          : {}),
       }).catch((err) => {
         console.error('[produksi] gagal:', err instanceof Error ? err.message : err);
       });
@@ -1073,6 +1096,41 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       const plan = latestWeeklyPlan(db);
       json(res, 200, { ok: true, plan });
       return;
+    }
+
+    // ---------------------------------------------------------------
+    // Jurnal Trading (Item 9) - structured manual input
+    // ---------------------------------------------------------------
+
+    const jurnalMatch = /^\/api\/jurnal-trading\/([^/]+)$/.exec(path);
+    if (jurnalMatch) {
+      const carouselId = jurnalMatch[1];
+      if (method === 'GET') {
+        const data = getJurnalTradingData(db, carouselId);
+        json(res, 200, { ok: true, data });
+        return;
+      }
+      if (method === 'PUT' || method === 'POST') {
+        const body = (await readJson(req)) as Record<string, unknown>;
+        const v = validateJurnalTradingPayload(body);
+        if (!v.ok) {
+          fail(res, 400, v.error ?? 'Payload tidak valid.');
+          return;
+        }
+        // Persist structured data; also prime extra_instructions for next produce
+        saveJurnalTradingData(db, carouselId, body as never);
+        const extra = buildJurnalExtraInstructions(body as never);
+        // Store extra instructions on carousel for visibility
+        try {
+          db.prepare('UPDATE carousels SET extra_instructions = ?, updated_at = ? WHERE id = ?').run(
+            extra,
+            new Date().toISOString(),
+            carouselId,
+          );
+        } catch { /* ignore */ }
+        json(res, 200, { ok: true, extraInstructions: extra });
+        return;
+      }
     }
 
     // ---------------------------------------------------------------

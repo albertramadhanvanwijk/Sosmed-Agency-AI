@@ -250,6 +250,69 @@ export function renderStudioHtml(config: StudioConfig): string {
               <div class="uploads" id="up-list"></div>
             </div>
 
+            <!-- Jurnal Trading structured input (hanya tampil saat kategori jurnal_trading) -->
+            <div id="jurnal-panel" style="display:none; margin-top:18px; padding:14px; border:1px solid var(--line); border-radius:12px; background: var(--cat-bg, #FFFBEB)">
+              <div class="fh" style="font-weight:700">Jurnal Trading — Input Terstruktur</div>
+              <div class="fd" style="margin-top:4px; color:var(--muted)">Isi data pair, tabel trade, dan deskripsi. Data ini menjadi sumber kebenaran untuk slide; angka tidak akan dikarang.</div>
+
+              <div class="grid g3" style="margin-top:12px">
+                <div><label class="f">Pair Utama *</label><input id="j-pair" placeholder="mis. EUR/USD, XAU/USD" /></div>
+                <div><label class="f">Timeframe</label><input id="j-timeframe" placeholder="mis. H1, H4, D1" /></div>
+                <div><label class="f">Gambar Pair (opsional)</label><input type="file" id="j-pair-file" accept="image/png,image/jpeg,image/webp,image/gif" /></div>
+              </div>
+
+              <div style="margin-top:12px">
+                <label class="f">Tabel Trade — Pairs | Direction | Session | %Risk | RR | Confluence | PnL | Result</label>
+                <div class="hint">Ketik manual atau paste CSV (header otomatis). Contoh baris: EUR/USD, Buy, London, 1%, 1:2, OB+CT, 50, Profit</div>
+                <textarea id="j-table-csv" rows="4" placeholder="Paste CSV di sini atau isi tabel di bawah"></textarea>
+                <div class="row" style="gap:8px; margin-top:8px">
+                  <button class="btn sm" id="j-csv-import">Impor CSV</button>
+                  <button class="btn sm" id="j-row-add">+ Baris</button>
+                  <span id="j-table-msg" class="hint"></span>
+                </div>
+                <div id="j-table-wrap" style="margin-top:10px; overflow:auto">
+                  <table class="tbl" id="j-table" style="width:100%; min-width:720px">
+                    <thead><tr><th>Pairs</th><th>Direction</th><th>Session</th><th>%Risk</th><th>RR</th><th>Confluence</th><th>PnL</th><th>Result</th><th></th></tr></thead>
+                    <tbody id="j-tbody"></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div class="grid g2" style="margin-top:12px">
+                <div>
+                  <label class="f">Deskripsi Direction *</label>
+                  <textarea id="j-dir-desc" rows="3" placeholder="mis. Trend up H1, retest OB"></textarea>
+                  <input type="file" id="j-dir-file" accept="image/png,image/jpeg,image/webp,image/gif" style="margin-top:6px" />
+                  <div class="hint">Upload chart direction (opsional)</div>
+                </div>
+                <div>
+                  <label class="f">Deskripsi Execution *</label>
+                  <textarea id="j-exec-desc" rows="3" placeholder="mis. Entry London open, SL di bawah OB"></textarea>
+                  <input type="file" id="j-exec-file" accept="image/png,image/jpeg,image/webp,image/gif" style="margin-top:6px" />
+                  <div class="hint">Upload chart execution (opsional)</div>
+                </div>
+              </div>
+
+              <div class="grid g2" style="margin-top:12px">
+                <div>
+                  <label class="f">Deskripsi Mark/Setup *</label>
+                  <textarea id="j-mark-desc" rows="3" placeholder="mis. Tandai OB dan FVG"></textarea>
+                  <input type="file" id="j-mark-file" accept="image/png,image/jpeg,image/webp,image/gif" style="margin-top:6px" />
+                  <div class="hint">Upload mark image (opsional)</div>
+                </div>
+                <div>
+                  <label class="f">Performance (opsional) + Catatan Umum</label>
+                  <input type="file" id="j-perf-file" accept="image/png,image/jpeg,image/webp,image/gif" />
+                  <div class="hint">Upload performance chart (opsional)</div>
+                  <textarea id="j-general-notes" rows="3" placeholder="Catatan umum (opsional) — akan masuk ke extraInstructions" style="margin-top:8px"></textarea>
+                  <div class="row" style="gap:8px; margin-top:8px">
+                    <button class="btn sm" id="j-save">Simpan Jurnal</button>
+                    <span id="j-save-msg" class="hint"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div class="row" style="margin-top:16px">
               <button class="btn primary" id="btn-produce">Mulai Produksi</button>
               <label class="row" style="gap:6px;color:var(--muted);font-size:12.5px">

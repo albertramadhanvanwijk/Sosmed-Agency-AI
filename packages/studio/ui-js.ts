@@ -618,6 +618,33 @@ function openDetail(id) {
       inner.appendChild(s5);
     }
 
+    if (d.jurnalTrading) {
+      var sJ = el('div', 'sec');
+      sJ.appendChild(el('h3', null, 'Data Jurnal Trading'));
+      var jt = d.jurnalTrading;
+      sJ.appendChild(el('div', 'fd', 'Pair: ' + jt.pair + (jt.timeframe ? ' · Timeframe: ' + jt.timeframe : '')));
+      if (jt.tradeTable && jt.tradeTable.length) {
+        var tJ = el('table', 'tbl'); var hJ = el('tr');
+        ['Pairs','Direction','Session','%Risk','RR','Confluence','PnL','Result'].forEach(function (x) { hJ.appendChild(el('th', null, x)); });
+        var thJ = el('thead'); thJ.appendChild(hJ); tJ.appendChild(thJ);
+        var tbJ = el('tbody');
+        jt.tradeTable.forEach(function (r) {
+          var tr = el('tr');
+          tr.appendChild(el('td', null, r.pairs)); tr.appendChild(el('td', null, r.direction));
+          tr.appendChild(el('td', null, r.session)); tr.appendChild(el('td', null, r.riskPct));
+          tr.appendChild(el('td', null, r.rr)); tr.appendChild(el('td', null, r.confluence));
+          tr.appendChild(el('td', null, r.pnl)); tr.appendChild(el('td', null, r.result));
+          tbJ.appendChild(tr);
+        });
+        tJ.appendChild(tbJ); sJ.appendChild(tJ);
+      }
+      if (jt.directionDesc) sJ.appendChild(el('div', 'fd', 'Direction: ' + jt.directionDesc));
+      if (jt.executionDesc) sJ.appendChild(el('div', 'fd', 'Execution: ' + jt.executionDesc));
+      if (jt.markDesc) sJ.appendChild(el('div', 'fd', 'Mark: ' + jt.markDesc));
+      if (jt.generalNotes) sJ.appendChild(el('div', 'fd', 'Catatan: ' + jt.generalNotes));
+      inner.appendChild(sJ);
+    }
+
     if (c.schedule_note || c.analysis_note) {
       var s6 = el('div', 'sec');
       s6.appendChild(el('h3', null, 'Catatan'));
@@ -894,7 +921,7 @@ function onCategoryChange() {
   var hints = {
     edukasi_trading: 'Risiko rendah. Fokus pada satu konsep per carousel.',
     edukasi_propfirm: 'Wajib menyebut sumber untuk angka aturan program.',
-    jurnal_trading: 'Kategori pembangun kepercayaan. Template kerugian wajib jujur.',
+    jurnal_trading: 'Kategori pembangun kepercayaan. Template kerugian wajib jujur. Gunakan panel Jurnal di bawah untuk input terstruktur.',
     market_info: 'Mengambil berita nyata terbaru secara otomatis.',
     market_outlook: 'Paling berisiko. Selalu dibingkai sebagai analisis skenario.'
   };
@@ -911,6 +938,8 @@ function onCategoryChange() {
   document.documentElement.style.setProperty('--cat-primary', theme.primary);
   document.documentElement.style.setProperty('--cat-accent', theme.accent);
   document.documentElement.style.setProperty('--cat-bg', theme.bg);
+  var jp = $('jurnal-panel');
+  if (jp) jp.style.display = catKey === 'jurnal_trading' ? '' : 'none';
 }
 
 function onCtaKindChange() {
@@ -993,6 +1022,81 @@ function renderUploads() {
   });
 }
 
+var jurnalState = { rows: [], imageIds: {} };
+
+function jurnalAddRow(data) {
+  data = data || { pairs: '', direction: '', session: '', riskPct: '', rr: '', confluence: '', pnl: '', result: '' };
+  jurnalState.rows.push(data);
+  renderJurnalTable();
+}
+
+function renderJurnalTable() {
+  var tb = $('j-tbody'); if (!tb) return;
+  tb.textContent = '';
+  jurnalState.rows.forEach(function (r, idx) {
+    var tr = document.createElement('tr');
+    ['pairs','direction','session','riskPct','rr','confluence','pnl','result'].forEach(function (k) {
+      var td = document.createElement('td');
+      var inp = document.createElement('input'); inp.value = r[k] || ''; inp.placeholder = k;
+      inp.oninput = function () { jurnalState.rows[idx][k] = inp.value; };
+      td.appendChild(inp); tr.appendChild(td);
+    });
+    var tdDel = document.createElement('td');
+    var del = document.createElement('button'); del.textContent = '×'; del.className = 'del';
+    del.onclick = function () { jurnalState.rows.splice(idx, 1); renderJurnalTable(); };
+    tdDel.appendChild(del); tr.appendChild(tdDel);
+    tb.appendChild(tr);
+  });
+}
+
+function parseCsvToRows(text) {
+  var lines = String(text || '').split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean);
+  if (lines.length === 0) return [];
+  var header = lines[0].toLowerCase();
+  var hasHeader = header.includes('pairs') || header.includes('direction') || header.includes('session');
+  var start = hasHeader ? 1 : 0;
+  var out = [];
+  for (var i = start; i < lines.length; i++) {
+    var parts = lines[i].split(',').map(function (s) { return s.trim(); });
+    if (parts.length < 8) continue;
+    out.push({ pairs: parts[0], direction: parts[1], session: parts[2], riskPct: parts[3], rr: parts[4], confluence: parts[5], pnl: parts[6], result: parts[7] });
+  }
+  return out;
+}
+
+function uploadJurnalFile(file, key) {
+  if (!file) return Promise.resolve(null);
+  if (file.size > 6 * 1024 * 1024) { toast('Berkas ' + file.name + ' melebihi 6 MB.', 'warn'); return Promise.resolve(null); }
+  var reader = new FileReader();
+  return new Promise(function (resolve) {
+    reader.onload = function () {
+      var uri = String(reader.result);
+      busy(null, 'Mengunggah ' + file.name, '', function () {
+        return api('/api/uploads', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ originalName: file.name, mimeType: file.type, byteSize: file.size, dataUri: uri }) });
+      }).then(function (r) { jurnalState.imageIds[key] = r.id; toast('Gambar tersimpan: ' + file.name, 'ok'); resolve(r.id); }).catch(function (e) { toast('Gagal mengunggah: ' + e.message, 'bad'); resolve(null); });
+    };
+    reader.onerror = function () { resolve(null); };
+    reader.readAsDataURL(file);
+  });
+}
+
+function collectJurnalPayload() {
+  return {
+    pair: ($('j-pair') && $('j-pair').value.trim()) || '',
+    timeframe: ($('j-timeframe') && $('j-timeframe').value.trim()) || null,
+    tradeTable: jurnalState.rows.slice(),
+    directionDesc: ($('j-dir-desc') && $('j-dir-desc').value.trim()) || '',
+    directionImageId: jurnalState.imageIds.direction || null,
+    executionDesc: ($('j-exec-desc') && $('j-exec-desc').value.trim()) || '',
+    executionImageId: jurnalState.imageIds.execution || null,
+    markDesc: ($('j-mark-desc') && $('j-mark-desc').value.trim()) || '',
+    markImageId: jurnalState.imageIds.mark || null,
+    performanceImageId: jurnalState.imageIds.performance || null,
+    pairImageId: jurnalState.imageIds.pair || null,
+    generalNotes: ($('j-general-notes') && $('j-general-notes').value.trim()) || null,
+  };
+}
+
 function startProduction() {
   var topic = $('f-topic').value.trim();
   if (!topic) { toast('Isi topik terlebih dahulu.', 'warn'); $('f-topic').focus(); return; }
@@ -1017,6 +1121,11 @@ function startProduction() {
     callToAction: cta,
     uploadIds: state.uploads.map(function (u) { return u.id; })
   };
+  // Attach jurnal payload for jurnal_trading if filled
+  if (payload.categoryKey === 'jurnal_trading') {
+    var jp = collectJurnalPayload();
+    if (jp.pair) payload.jurnalTrading = jp;
+  }
 
   return busy($('btn-produce'), 'Memulai produksi', 'Pipeline 9 agen sedang berjalan. Ini memakan 2 sampai 5 menit. Anda dapat berpindah tab; kemajuannya terlihat di Dashboard dan Agent Office.', function () {
     return api('/api/produce', {
@@ -1315,6 +1424,43 @@ $('f-topic').oninput = function () {
 $('f-cta-kind').onchange = onCtaKindChange;
 $('f-files').onchange = function (e) { addFiles(e.target.files); };
 $('btn-produce').onclick = startProduction;
+
+if ($('j-row-add')) $('j-row-add').onclick = function () { jurnalAddRow(); };
+if ($('j-csv-import')) $('j-csv-import').onclick = function () {
+  var txt = $('j-table-csv') && $('j-table-csv').value;
+  var rows = parseCsvToRows(txt);
+  if (rows.length === 0) { if ($('j-table-msg')) $('j-table-msg').textContent = 'Tidak ada baris valid (butuh 8 kolom).'; return; }
+  rows.forEach(function (r) { jurnalAddRow(r); });
+  if ($('j-table-msg')) $('j-table-msg').textContent = rows.length + ' baris diimpor.';
+};
+['j-pair-file','j-dir-file','j-exec-file','j-mark-file','j-perf-file'].forEach(function (id) {
+  var elFile = $(id); if (!elFile) return;
+  elFile.onchange = function (e) {
+    var f = e.target.files[0]; if (!f) return;
+    var key = id === 'j-pair-file' ? 'pair' : id === 'j-dir-file' ? 'direction' : id === 'j-exec-file' ? 'execution' : id === 'j-mark-file' ? 'mark' : 'performance';
+    uploadJurnalFile(f, key);
+  };
+});
+if ($('j-save')) $('j-save').onclick = function () {
+  var payload = collectJurnalPayload();
+  if (!payload.pair) { toast('Isi Pair Utama terlebih dahulu.', 'warn'); return; }
+  if (!payload.directionDesc || !payload.executionDesc || !payload.markDesc) { toast('Lengkapi deskripsi direction, execution, dan mark.', 'warn'); return; }
+  if (payload.tradeTable.length === 0) { toast('Tabel trade masih kosong.', 'warn'); return; }
+  // Saat di tab Buat (belum ada carousel), simpan lokal dan ikutkan saat Mulai Produksi
+  if (!state.detailId) {
+    if ($('j-save-msg')) $('j-save-msg').textContent = 'Siap — data akan dikirim bersama produksi berikutnya.';
+    toast('Data jurnal siap. Klik Mulai Produksi untuk membuat carousel.', 'ok');
+    return;
+  }
+  busy($('j-save'), 'Menyimpan jurnal', '', function () {
+    return api('/api/jurnal-trading/' + state.detailId, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+    });
+  }).then(function (r) {
+    if ($('j-save-msg')) $('j-save-msg').textContent = 'Tersimpan — extraInstructions siap dipakai produksi.';
+    toast('Jurnal tersimpan.', 'ok');
+  }).catch(function (e) { toast('Gagal menyimpan jurnal: ' + e.message, 'bad'); if ($('j-save-msg')) $('j-save-msg').textContent = e.message; });
+};
 
 $('b-logo').onchange = function (e) {
   var f = e.target.files[0];
