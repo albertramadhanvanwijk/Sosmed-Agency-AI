@@ -325,30 +325,54 @@ function decide(id, decision, btn) {
 
 function openRejectDialog(id) {
   var c = state.carousels.filter(function (x) { return x.id === id; })[0];
-  if (!window.confirm('Tolak carousel ini: ' + (c ? (c.title || c.topic) : id) + '?')) return;
+  if (!c) return;
   
-  var note = prompt('Alasan penolakan (opsional, minimal 5 karakter jika diisi):', '');
-  if (note === null) return; // User cancelled
-  note = (note || '').trim();
+  openDrawer();
+  var inner = $('drawer-i');
+  inner.textContent = '';
+
+  var t = el('h2', null, 'Tolak Carousel');
+  t.style.cssText = 'font-size:17px;margin-bottom:6px;padding-right:36px';
+  inner.appendChild(t);
+  inner.appendChild(el('div', 'hint', c.title || c.topic));
+
+  var b1 = el('div');
+  b1.style.marginTop = '16px';
+  b1.appendChild(el('label', 'f', 'Alasan Penolakan (wajib diisi)'));
+  var ta = document.createElement('textarea');
+  ta.rows = 4;
+  ta.id = 'reject-note';
+  ta.placeholder = 'Jelaskan mengapa carousel ini ditolak. Catatan ini akan disimpan untuk pembelajaran.';
+  b1.appendChild(ta);
+  inner.appendChild(b1);
+
+  var row = el('div', 'row');
+  row.style.marginTop = '18px';
+  var bCancel = el('button', 'btn', 'Batal');
+  bCancel.onclick = closeDrawer;
+  row.appendChild(bCancel);
   
-  // Validate if note was provided but too short
-  if (note.length > 0 && note.length < 5) {
-    alert('Alasan harus minimal 5 karakter jika diisi.');
-    return;
-  }
-  
-  var btn = null; // No button to animate for rejection
-  return busy(btn, 'Menolak carousel', 'Menyimpan…', function () {
-    return api('/api/carousels/' + id + '/decision', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ decision: 'rejected', note: note, autoRevise: false })
-    });
-  }).then(function () {
-    toast('Carousel ditolak' + (note ? ' dengan alasan.' : '.'), 'ok');
-    closeDrawer();
-    loadApprovals();
-    loadOverview(true);
-  }).catch(function (e) { toast('Gagal: ' + e.message, 'bad'); });
+  var bConfirm = el('button', 'btn bad', 'Ya, Tolak');
+  bConfirm.onclick = function () {
+    var note = ($('reject-note') && $('reject-note').value || '').trim();
+    if (note.length < 5) { toast('Alasan penolakan wajib diisi (minimal 5 karakter).', 'warn'); return; }
+    if (!window.confirm('Yakin ingin menolak carousel ini? Carousel akan dipindahkan ke arsip.')) return;
+    
+    busy(bConfirm, 'Menolak carousel', 'Menyimpan…', function () {
+      return api('/api/carousels/' + id + '/decision', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decision: 'rejected', note: note, autoRevise: false })
+      });
+    }).then(function () {
+      toast('Carousel ditolak dan dipindahkan ke arsip.', 'ok');
+      closeDrawer();
+      loadApprovals();
+      loadOverview(true);
+      loadPipeline();
+    }).catch(function (e) { toast('Gagal: ' + e.message, 'bad'); });
+  };
+  row.appendChild(bConfirm);
+  inner.appendChild(row);
 }
 
 /**
