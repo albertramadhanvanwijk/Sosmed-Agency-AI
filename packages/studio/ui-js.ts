@@ -269,8 +269,12 @@ function loadPipeline() {
 function loadApprovals() {
   return api('/api/carousels?status=needs_review').then(function (d) {
     var n = $('approvals-list');
-    if (d.carousels.length === 0) { fill(n, [el('div', 'empty', 'Tidak ada carousel yang menunggu persetujuan.')]); return; }
-    fill(n, d.carousels.map(function (c) {
+    // Filter out archived carousels
+    var activeCarousels = d.carousels.filter(function (c) {
+      return !c.archived_at && c.status !== 'archived';
+    });
+    if (activeCarousels.length === 0) { fill(n, [el('div', 'empty', 'Tidak ada carousel yang menunggu persetujuan.')]); return; }
+    fill(n, activeCarousels.map(function (c) {
       var box = el('div', 'finding ' + (c.compliance_blocked ? 'block' : ''));
       var h = el('div', 'fh');
       h.appendChild(el('span', null, c.title || c.topic));

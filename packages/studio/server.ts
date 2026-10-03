@@ -31,6 +31,7 @@ import {
   DEFAULT_CLIENT,
   DEFAULT_ORG,
   addKnowledge,
+  archiveCarousel,
   audit,
   createJob,
   decideCarousel,
@@ -787,7 +788,12 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         });
         revised.learnedRuleId = ruleId;
 
-        // 3. Jalankan perbaikan bila diminta. Produksi ulang memakai catatan
+        // 3. Archive rejected carousels automatically
+        if (decision === 'rejected') {
+          archiveCarousel(db, id, 'rejected');
+        }
+
+        // 4. Jalankan perbaikan bila diminta. Produksi ulang memakai catatan
         //    revisi sebagai permintaan khusus, sehingga hasilnya benar-benar
         //    menanggapi catatan itu — bukan sekadar mengulang produksi lama.
         //    HANYA untuk changes_requested, BUKAN untuk rejected.
@@ -820,6 +826,41 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       }
 
       json(res, 200, { ok: true, carousel: getCarousel(db, id), revised });
+      return;
+    }
+
+    const archiveMatch = /^\/api\/carousels\/([^/]+)\/archive$/.exec(path);
+    if (method === 'POST' && archiveMatch) {
+      const id = archiveMatch[1];
+      const body = (await readJson(req)) as { reason?: string };
+      const rawReason = (body.reason ?? 'archived').trim();
+      // Sanitasi: potong 50 karakter agar nama folder tidak melebihi batas filesystem (255 char)
+      const reason = rawReason.slice(0, 50).replace(/[^a-zA-Z0-9_-]/g, '_') || 'archived';
+
+      const row = getCarousel(db, id);
+      if (!row) {
+        fail(res, 404, 'Carousel tidak ditemukan.');
+        return;
+      }
+
+      try {
+        // Archive the carousel in database
+        archiveCarousel(db, id, reason);
+
+        // Prepare archive path
+        const now = new Date().toISOString();
+        const dateStr = now.split('T')[0].replace(/-/g, '');
+        const archiveFolderName = `${row.category_key}_${dateStr}_${reason}`;
+        const archivePath = `output/archive/${archiveFolderName}/`;
+
+        json(res, 200, {
+          ok: true,
+          carousel: getCarousel(db, id),
+          archivedPath: archivePath,
+        });
+      } catch (err) {
+        fail(res, 500, err instanceof Error ? err.message : String(err));
+      }
       return;
     }
 

@@ -29,6 +29,7 @@ export type CarouselStatus =
   | 'changes_requested'
   | 'approved'
   | 'rejected'
+  | 'archived'
   | 'failed';
 
 /** Baris carousel. */
@@ -62,6 +63,10 @@ export interface CarouselRow {
   revision_round: number;
   /** Permintaan tambahan dari pengguna saat produksi. */
   extra_instructions: string | null;
+  /** Waktu carousel diarsipkan. */
+  archived_at: string | null;
+  /** Alasan carousel diarsipkan. */
+  archive_reason: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -144,7 +149,7 @@ export interface KnowledgeRow {
 
 const ORG_ID = 'org_default';
 const CLIENT_ID = 'client_default';
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 /**
  * Menghapus data contoh dari basis data.
@@ -226,6 +231,9 @@ export function openDb(dbPath: string): DatabaseSync {
       revision_round INTEGER NOT NULL DEFAULT 0,
       -- Ringkasan permintaan tambahan pengguna, untuk ditampilkan di detail.
       extra_instructions TEXT,
+      -- Archive management fields
+      archived_at TEXT,
+      archive_reason TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -837,6 +845,18 @@ export function decideCarousel(
   ).run(decision, decision === 'approved' ? now : null, decision === 'approved' ? actor : null, note, now, id);
 
   audit(db, actor, `carousel.${decision}`, 'carousel', id, { note });
+}
+
+/** Archive a carousel by moving it to archive status and recording timestamp. */
+export function archiveCarousel(
+  db: DatabaseSync,
+  carouselId: string,
+  reason: string,
+): void {
+  const now = new Date().toISOString();
+  db.prepare(
+    'UPDATE carousels SET status = ?, archived_at = ?, archive_reason = ?, updated_at = ? WHERE id = ?'
+  ).run('archived', now, reason, now, carouselId);
 }
 
 /** Ringkasan KPI untuk papan kendali. */
