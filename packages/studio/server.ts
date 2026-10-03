@@ -85,7 +85,7 @@ import { produceCarousel, PipelineError } from '../agents/pipeline.ts';
 import { createBrandKit } from '../shared/brand.ts';
 import { getCategory, CATEGORY_ORDER, isCategoryKey } from '../shared/categories.ts';
 import { RATIO_PROFILES } from '../shared/theme.ts';
-import { listThemes } from '../templates/themes.ts';
+import { listThemes, applyTheme } from '../templates/themes.ts';
 import { resolveTemplate } from '../templates/registry.ts';
 import { buildHtml } from '../templates/base.ts';
 import { NEWS_SOURCES } from '../news/feeds.ts';
@@ -532,6 +532,7 @@ async function previewSlide(
   if (!slide) return null;
 
   const brand = createBrandKit('PropDesk');
+  const themedTokens = applyTheme(brand.tokens, spec.categoryKey);
   const category = getCategory(spec.categoryKey);
   const ratio = RATIO_PROFILES[ratioKey];
   if (!ratio) return null;
@@ -540,7 +541,7 @@ async function previewSlide(
   const html = buildHtml(
     slide as Slide,
     {
-      tokens: brand.tokens,
+      tokens: themedTokens,
       ratio,
       position: slide.position,
       total: spec.slides.length,
