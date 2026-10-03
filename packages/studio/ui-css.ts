@@ -206,7 +206,7 @@ table.tbl td.wrap { max-width: 320px; word-break: break-word; }
 .office-centered { max-width: 1280px; margin: 0 auto; width: 100%; }
 .stage { position: relative; width: 900px; height: 600px; margin: 0 auto; transform-origin: center; transform: scale(.65); }
 .iso-floor {
-  position: absolute; left: 50%; top: 48%; width: 1700px; height: 1700px; margin: -850px 0 0 -850px;
+  position: absolute; left: 50%; top: 48%; width: 1100px; height: 1100px; margin: -550px 0 0 -550px;
   transform: scale(1, .55) rotate(45deg);
   background-image:
     linear-gradient(rgba(34,211,238,.085) 1px, transparent 1px),

@@ -742,7 +742,7 @@ var ZG = [
   { key: 'publish_desk', name: 'Meja Terbit', order: 6, color: '#22C55E', col: 2, row: 1 },
   { key: 'library', name: 'Arsip Pengetahuan', order: 7, color: '#61748F', col: 1, row: 2 }
 ];
-var HW = 292, HH = 160, OX = 880, OY = 150;
+var HW = 292, HH = 160, OX = 450, OY = 150;
 function iso(c, r) { return { x: OX + (c - r) * HW, y: OY + (c + r) * HH }; }
 
 var SHORT = { strategist: 'ST', research: 'RS', copywriter: 'CW', composer: 'CP', renderer: 'RN', compliance: 'CO', compliance_advisor: 'CA', scheduler: 'SC', analyst: 'AN' };
