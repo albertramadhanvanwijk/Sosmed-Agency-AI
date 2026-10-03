@@ -854,9 +854,60 @@ export function archiveCarousel(
   reason: string,
 ): void {
   const now = new Date().toISOString();
-  db.prepare(
-    'UPDATE carousels SET status = ?, archived_at = ?, archive_reason = ?, updated_at = ? WHERE id = ?'
-  ).run('archived', now, reason, now, carouselId);
+  const safeReason = reason.trim().slice(0, 50).replace(/[^a-zA-Z0-9_-]/g, '_') || 'archived';
+  let row: { category_key: string } | undefined;
+  try {
+    const stmt = db.prepare('SELECT category_key FROM carousels WHERE id = ?') as unknown as {
+      get?: (id: string) => { category_key: string } | undefined;
+    };
+    if (typeof stmt.get === 'function') row = stmt.get(carouselId);
+  } catch {
+    row = undefined;
+  }
+  const dateStr = now.split('T')[0].replace(/-/g, '');
+  const sanitized = safeReason.toLowerCase().replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'archived';
+  const truncated = sanitized.slice(0, 50);
+  const folder = row?.category_key ? `output/archive/${row.category_key}_${dateStr}_${truncated}/` : null;
+  if (folder) {
+    db.prepare(
+      'UPDATE carousels SET status = ?, archived_at = ?, archive_reason = ?, folder = ?, updated_at = ? WHERE id = ?'
+    ).run('archived', now, safeReason, folder, now, carouselId);
+  } else {
+    db.prepare(
+      'UPDATE carousels SET status = ?, archived_at = ?, archive_reason = ?, updated_at = ? WHERE id = ?'
+    ).run('archived', now, safeReason, now, carouselId);
+  }
+}
+
+function slugify(input: string): string {
+  const normalized = input
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  const underscored = normalized.replace(/[^a-z0-9]+/g, '_');
+  const collapsed = underscored.replace(/_+/g, '_').replace(/^_+|_+$/g, '');
+  return collapsed;
+}
+
+export function buildApproveFolderName(categoryKey: string, dateIso: string, title: string): string {
+  const dateStr = dateIso.split('T')[0].replace(/-/g, '');
+  const slug = slugify(title).slice(0, 40).replace(/_$/g, '') || 'content';
+  const raw = `${categoryKey}_${dateStr}_${slug}`;
+  return raw.length <= 100 ? raw : raw.slice(0, 100).replace(/_+$/g, '');
+}
+
+export function buildArchiveFolderName(categoryKey: string, dateIso: string, reason: string): string {
+  const dateStr = dateIso.split('T')[0].replace(/-/g, '');
+  const safe = reason.trim().slice(0, 50).replace(/[^a-zA-Z0-9_-]/g, '_') || 'archived';
+  const sanitized = safe.toLowerCase().replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'archived';
+  const truncated = sanitized.slice(0, 50);
+  const raw = `${categoryKey}_${dateStr}_${truncated}`;
+  return raw.length <= 100 ? raw : raw.slice(0, 100).replace(/_+$/g, '');
+}
+
+export function updateCarouselFolder(db: DatabaseSync, id: string, folder: string): void {
+  const now = new Date().toISOString();
+  db.prepare('UPDATE carousels SET folder = ?, updated_at = ? WHERE id = ?').run(folder, now, id);
 }
 
 /** Ringkasan KPI untuk papan kendali. */

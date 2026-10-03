@@ -20,7 +20,7 @@
  * tangkapan layar yang bisa berbeda dari hasil akhir.
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { readFile, writeFile, mkdir, stat } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, stat, readdir, copyFile, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { extname, join, resolve, normalize, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -33,6 +33,8 @@ import {
   addKnowledge,
   archiveCarousel,
   audit,
+  buildApproveFolderName,
+  buildArchiveFolderName,
   createJob,
   decideCarousel,
   defaultDbPath,
@@ -745,11 +747,52 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         return;
       }
 
+      // Helper: move folder contents on disk (best-effort, non-blocking for DB decision)
+      async function moveFolderOnDisk(from: string | null, to: string): Promise<void> {
+        if (!from || !existsSync(from)) return;
+        try {
+          await mkdir(to, { recursive: true });
+          const entries = await readdir(from);
+          for (const name of entries) {
+            await copyFile(join(from, name), join(to, name));
+          }
+          await rm(from, { recursive: true, force: true });
+        } catch (err) {
+          console.warn('[output-organize] move failed', from, '->', to, err instanceof Error ? err.message : err);
+        }
+      }
+
+      // For approve/reject, compute destination folder BEFORE decide (need row.folder before status flip)
+      const currentFolder = row.folder;
+      // Approve: output/approve/{category}_{YYYYMMDD}_{slug}/
+      let approveDestAbs: string | null = null;
+      if (decision === 'approved') {
+        const nowIso = new Date().toISOString();
+        const folderName = buildApproveFolderName(row.category_key, nowIso, row.title);
+        approveDestAbs = join(OUTPUT_DIR, 'approve', folderName) + sep;
+      }
+      // Rejected archive dest is derived from archiveCarousel's folder, but precompute for fallback move
+      let archiveDestAbs: string | null = null;
+      if (decision === 'rejected') {
+        const nowIso = new Date().toISOString();
+        const folderName = buildArchiveFolderName(row.category_key, nowIso, 'rejected');
+        archiveDestAbs = join(OUTPUT_DIR, 'archive', folderName) + sep;
+      }
+
       try {
         decideCarousel(db, id, decision, note, 'operator');
       } catch (err) {
         fail(res, 409, err instanceof Error ? err.message : String(err));
         return;
+      }
+
+      // After successful DB decision: approved -> update folder column + move files (best-effort)
+      if (approveDestAbs) {
+        const { updateCarouselFolder } = await import('./db.ts');
+        try {
+          updateCarouselFolder(db, id, approveDestAbs);
+        } catch { /* ignore */ }
+        void moveFolderOnDisk(currentFolder, approveDestAbs);
       }
 
       let revised: { jobQueued: boolean; newCarouselId: string | null; learnedRuleId: string | null } = {
@@ -788,9 +831,13 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         });
         revised.learnedRuleId = ruleId;
 
-        // 3. Archive rejected carousels automatically
+        // 3. Archive rejected carousels automatically (DB + disk)
         if (decision === 'rejected') {
           archiveCarousel(db, id, 'rejected');
+          // Ensure files are moved to the archived folder (archiveCarousel set folder already)
+          const archived = getCarousel(db, id);
+          const target = archived?.folder ?? archiveDestAbs;
+          if (target) void moveFolderOnDisk(currentFolder, target);
         }
 
         // 4. Jalankan perbaikan bila diminta. Produksi ulang memakai catatan
@@ -844,14 +891,25 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       }
 
       try {
-        // Archive the carousel in database
+        const previousFolder = row.folder;
+        // Archive the carousel in database (also sets folder to archive path)
         archiveCarousel(db, id, reason);
-
-        // Prepare archive path
-        const now = new Date().toISOString();
-        const dateStr = now.split('T')[0].replace(/-/g, '');
-        const archiveFolderName = `${row.category_key}_${dateStr}_${reason}`;
-        const archivePath = `output/archive/${archiveFolderName}/`;
+        const archived = getCarousel(db, id);
+        const archivePath = archived?.folder ?? `output/archive/${buildArchiveFolderName(row.category_key, new Date().toISOString(), reason)}/`;
+        // Move files on disk (best-effort)
+        if (previousFolder && existsSync(previousFolder)) {
+          try {
+            const absArchive = join(OUTPUT_DIR, 'archive', archivePath.split('output/archive/')[1] ?? '');
+            await mkdir(absArchive, { recursive: true });
+            const entries = await readdir(previousFolder);
+            for (const name of entries) {
+              await copyFile(join(previousFolder, name), join(absArchive, name));
+            }
+            await rm(previousFolder, { recursive: true, force: true });
+          } catch (err) {
+            console.warn('[archive] move failed', previousFolder, '->', archivePath, err instanceof Error ? err.message : err);
+          }
+        }
 
         json(res, 200, {
           ok: true,
