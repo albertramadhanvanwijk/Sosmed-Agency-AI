@@ -499,7 +499,9 @@ export function renderStudioHtml(config: StudioConfig): string {
 <div class="drawer" id="drawer"><button class="x" id="drawer-x">×</button><div class="drawer-i" id="drawer-i"></div></div>
 <div class="slide-zoom" id="slide-zoom">
   <div class="zoom-stage" id="zoom-stage">
-    <iframe class="zoom-frame" id="zoom-frame" title="Slide zoom"></iframe>
+    <div class="zoom-wrapper" id="zoom-wrapper">
+      <iframe class="zoom-frame" id="zoom-frame" title="Slide zoom"></iframe>
+    </div>
     <div class="zoom-info" id="zoom-info"></div>
     <button class="zoom-close" id="zoom-close" title="Tutup (Esc)">×</button>
     <div class="zoom-controls" id="zoom-controls">

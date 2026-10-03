@@ -293,9 +293,10 @@ table.tbl td.wrap { max-width: 320px; word-break: break-word; }
 /* ===================== SLIDE ZOOM MODAL — Item 12 ===================== */
 .slide-zoom { position: fixed; inset: 0; z-index: 75; display: none; place-items: center; background: rgba(3,6,12,.88); }
 .slide-zoom.on { display: grid; }
-.slide-zoom .zoom-stage { position: relative; width: 92vw; height: 88vh; display: grid; place-items: center; overflow: auto; }
-.slide-zoom .zoom-frame { width: 100%; height: 100%; border: 0; background: #08111F; border-radius: 10px; transition: transform .18s; cursor: grab; }
-.slide-zoom .zoom-frame.dragging { cursor: grabbing; }
+.slide-zoom .zoom-stage { position: relative; width: 92vw; height: 88vh; overflow: auto; }
+.slide-zoom .zoom-wrapper { position: relative; transform-origin: top left; }
+.slide-zoom .zoom-frame { width: 1080px; height: 1350px; border: 0; background: #08111F; border-radius: 10px; pointer-events: none; }
+.slide-zoom .zoom-wrapper.dragging { cursor: grabbing; }
 .zoom-controls { position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; background: var(--panel-3); border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px; }
 .zoom-controls button { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); cursor: pointer; font-weight: 700; }
 .zoom-controls button:hover { border-color: var(--accent); }

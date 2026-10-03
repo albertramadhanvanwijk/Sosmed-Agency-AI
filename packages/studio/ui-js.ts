@@ -459,9 +459,9 @@ function closeDrawer() { state.detailId = null; $('backdrop').classList.remove('
 var zoomState = { level: 1, x: 0, y: 0, dragging: false, sx: 0, sy: 0, id: null, pos: 1, slides: [] };
 
 function applyZoom() {
-  var fr = $('zoom-frame'); if (!fr) return;
-  fr.style.transform = 'scale(' + zoomState.level + ') translate(' + zoomState.x + 'px,' + zoomState.y + 'px)';
-  fr.style.transformOrigin = 'center center';
+  var wr = $('zoom-wrapper'); if (!wr) return;
+  wr.style.transform = 'scale(' + zoomState.level + ') translate(' + zoomState.x + 'px,' + zoomState.y + 'px)';
+  wr.style.transformOrigin = '0 0';
   var info = $('zoom-info'); if (info) info.textContent = 'Slide ' + zoomState.pos + ' / ' + zoomState.slides.length + ' · ' + Math.round(zoomState.level * 100) + '% · drag untuk pan · +/- zoom · Esc tutup';
 }
 
@@ -1697,15 +1697,15 @@ document.addEventListener('keydown', function (e) {
   var zc = $('zoom-close'); if (zc) zc.onclick = closeSlideZoom;
   var zm2 = $('slide-zoom'); if (zm2) zm2.onclick = function (ev) { if (ev.target === zm2) closeSlideZoom(); };
   var zd = $('zoom-download'); if (zd) zd.onclick = function () { var fr = $('zoom-frame'); if (fr && fr.src) window.open(fr.src, '_blank'); };
-  var fr2 = $('zoom-frame'); if (fr2) {
-    fr2.addEventListener('wheel', function (ev) { ev.preventDefault(); if (ev.deltaY < 0) zoomIn(); else zoomOut(); }, { passive: false });
+  var wr = $('zoom-wrapper'); if (wr) {
+    wr.addEventListener('wheel', function (ev) { ev.preventDefault(); if (ev.deltaY < 0) zoomIn(); else zoomOut(); }, { passive: false });
     var dragging = false;
-    fr2.addEventListener('mousedown', function (ev) { dragging = true; zoomState.dragging = true; fr2.classList.add('dragging'); zoomState.sx = ev.clientX - zoomState.x; zoomState.sy = ev.clientY - zoomState.y; });
+    wr.addEventListener('mousedown', function (ev) { dragging = true; zoomState.dragging = true; wr.classList.add('dragging'); zoomState.sx = ev.clientX - zoomState.x; zoomState.sy = ev.clientY - zoomState.y; });
     window.addEventListener('mousemove', function (ev) { if (!dragging) return; zoomState.x = ev.clientX - zoomState.sx; zoomState.y = ev.clientY - zoomState.sy; applyZoom(); });
-    window.addEventListener('mouseup', function () { dragging = false; zoomState.dragging = false; var f = $('zoom-frame'); if (f) f.classList.remove('dragging'); });
-    fr2.addEventListener('touchstart', function (ev) { if (ev.touches.length === 1) { dragging = true; zoomState.sx = ev.touches[0].clientX - zoomState.x; zoomState.sy = ev.touches[0].clientY - zoomState.y; } }, { passive: true });
-    fr2.addEventListener('touchmove', function (ev) { if (!dragging || ev.touches.length !== 1) return; zoomState.x = ev.touches[0].clientX - zoomState.sx; zoomState.y = ev.touches[0].clientY - zoomState.sy; applyZoom(); }, { passive: true });
-    fr2.addEventListener('touchend', function () { dragging = false; });
+    window.addEventListener('mouseup', function () { dragging = false; zoomState.dragging = false; var w = $('zoom-wrapper'); if (w) w.classList.remove('dragging'); });
+    wr.addEventListener('touchstart', function (ev) { if (ev.touches.length === 1) { dragging = true; zoomState.sx = ev.touches[0].clientX - zoomState.x; zoomState.sy = ev.touches[0].clientY - zoomState.y; } }, { passive: true });
+    wr.addEventListener('touchmove', function (ev) { if (!dragging || ev.touches.length !== 1) return; zoomState.x = ev.touches[0].clientX - zoomState.sx; zoomState.y = ev.touches[0].clientY - zoomState.sy; applyZoom(); }, { passive: true });
+    wr.addEventListener('touchend', function () { dragging = false; });
   }
 })();
 
