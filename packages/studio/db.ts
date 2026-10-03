@@ -15,7 +15,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import type { CategoryKey } from '../shared/types.ts';
+import type { CategoryKey, CallToAction } from '../shared/types.ts';
 import { isCategoryKey } from '../shared/categories.ts';
 import type { LearnedRule } from '../shared/types.ts';
 
@@ -63,6 +63,8 @@ export interface CarouselRow {
   revision_round: number;
   /** Permintaan tambahan dari pengguna saat produksi. */
   extra_instructions: string | null;
+  /** Ajakan bertindak (CTA) yang dipilih pengguna, disimpan sebagai JSON. */
+  call_to_action: string | null;
   /** Waktu carousel diarsipkan. */
   archived_at: string | null;
   /** Alasan carousel diarsipkan. */
@@ -231,6 +233,8 @@ export function openDb(dbPath: string): DatabaseSync {
       revision_round INTEGER NOT NULL DEFAULT 0,
       -- Ringkasan permintaan tambahan pengguna, untuk ditampilkan di detail.
       extra_instructions TEXT,
+      -- Ajakan bertindak (CTA) yang dipilih pengguna, disimpan sebagai JSON.
+      call_to_action TEXT,
       -- Archive management fields
       archived_at TEXT,
       archive_reason TEXT,
@@ -623,6 +627,7 @@ export function saveProduction(
     asOf: string;
     disclaimerKey: string;
     folder: string;
+    callToAction?: CallToAction;
     slides: {
       position: number;
       role: string;
@@ -681,8 +686,8 @@ export function saveProduction(
         id, org_id, client_id, category_key, topic, title, status, risk_level,
         compliance_outcome, compliance_blocked, as_of, disclaimer_key, folder,
         slide_count, cost_usd, tokens_in, tokens_out, duration_ms,
-        schedule_note, analysis_note, created_at, updated_at
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        schedule_note, analysis_note, call_to_action, created_at, updated_at
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     ).run(
       input.carouselId,
       ORG_ID,
@@ -704,10 +709,11 @@ export function saveProduction(
       input.tokensIn,
       input.tokensOut,
       // `node:sqlite` menolak nilai undefined, jadi nilai opsional harus
-      // dinormalkan menjadi null di satu tempat ini.
+      // dinormalisasi menjadi null di satu tempat ini.
       input.durationMs ?? null,
       input.scheduleNote ?? null,
       input.analysisNote ?? null,
+      input.callToAction ? JSON.stringify(input.callToAction) : null,
       now,
       now,
     );

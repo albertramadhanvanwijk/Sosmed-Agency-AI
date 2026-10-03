@@ -127,6 +127,8 @@ export interface CarouselSpec {
   locale: string;
   /** Penanda waktu data. Wajib untuk kategori berita/outlook. */
   asOf?: string;
+  /** Ajakan bertindak yang dipilih pengguna; ditampilkan pada slide cta. */
+  callToAction?: CallToAction;
   slides: Slide[];
 }
 

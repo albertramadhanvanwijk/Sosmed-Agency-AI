@@ -803,6 +803,7 @@ export async function produceCarousel(
     disclaimerKey,
     locale: 'id-ID',
     asOf,
+    callToAction: req.callToAction,
     slides,
   };
 

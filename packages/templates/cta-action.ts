@@ -2,8 +2,23 @@
 // 10. cta-action — slide ajakan bertindak khusus per kategori
 // ---------------------------------------------------------------------------
 
-import { TemplateDefinition } from './registry.ts';
-import { esc, kicker, emphasize, formatDateShort } from './base.ts';
+import {
+  components,
+  type TemplateContext,
+  type TemplateDefinition,
+} from './base.ts';
+
+const { kicker, esc, emphasize } = components;
+
+function formatDateShort(value: string): string {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  try {
+    return new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }).format(d);
+  } catch {
+    return value;
+  }
+}
 
 const ctaAction: TemplateDefinition = {
   slug: 'cta-action',

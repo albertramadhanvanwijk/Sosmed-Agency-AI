@@ -287,6 +287,7 @@ async function runProduction(input: {
       asOf: result.spec.asOf ?? new Date().toISOString(),
       disclaimerKey: result.spec.disclaimerKey,
       folder: outputPath,
+      callToAction: input.callToAction,
       slides: result.spec.slides.map((s) => ({
         position: s.position,
         role: s.role,
@@ -416,6 +417,11 @@ async function runProduction(input: {
       currentStep: null,
       error: result.compliance.blocked ? 'Diblokir oleh pemeriksaan kepatuhan; lihat temuan.' : null,
     });
+
+    // Simpan spec ke folder output agar pratinjau bisa memuat callToAction
+    const specPath = join(outputPath, 'slide-spec.json');
+    await writeFile(specPath, JSON.stringify(result.spec, null, 2), 'utf8');
+
   } catch (err) {
     const message =
       err instanceof PipelineError
@@ -514,6 +520,7 @@ async function previewSlide(
       disclaimerKey: row.disclaimer_key ?? 'default_finansial',
       locale: 'id-ID',
       ...(row.as_of ? { asOf: row.as_of } : {}),
+      callToAction: row.call_to_action ? JSON.parse(row.call_to_action) : undefined,
       slides: rows.map((s) => ({
         position: s.position,
         role: s.role as Slide['role'],
@@ -549,6 +556,7 @@ async function previewSlide(
       categoryLabel: category.name.toUpperCase(),
       asOf: spec.asOf,
       disclaimerText: brand.disclaimers[spec.disclaimerKey] ?? brand.disclaimers.default_finansial,
+      ...(spec.callToAction ? { callToAction: spec.callToAction } : {}),
     },
     template,
   );
