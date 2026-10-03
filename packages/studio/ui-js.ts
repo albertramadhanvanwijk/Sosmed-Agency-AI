@@ -230,7 +230,7 @@ function loadOverview(silent) {
 
 var COLUMNS = [
   ['briefed', 'Briefing'], ['researching', 'Riset'], ['drafting', 'Menulis'], ['designing', 'Desain'],
-  ['needs_review', 'Perlu Review'], ['approved', 'Disetujui'], ['changes_requested', 'Minta Revisi'], ['failed', 'Gagal']
+  ['needs_review', 'Perlu Review'], ['approved', 'Disetujui'], ['changes_requested', 'Minta Revisi'], ['failed', 'Gagal'], ['archived', 'Arsip']
 ];
 
 function loadPipeline() {
@@ -1178,7 +1178,7 @@ function renderJurnalTable() {
 }
 
 function parseCsvToRows(text) {
-  var lines = String(text || '').split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean);
+  var lines = String(text || '').split(/\\r?\\n/).map(function (l) { return l.trim(); }).filter(Boolean);
   if (lines.length === 0) return [];
   var header = lines[0].toLowerCase();
   var hasHeader = header.includes('pairs') || header.includes('direction') || header.includes('session');

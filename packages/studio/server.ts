@@ -842,26 +842,30 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         learnedRuleId: null,
       };
 
-      if (decision !== 'approved') {
-        // 1. Catat revisi sebagai bahan pembelajaran.
+      if (decision === 'rejected') {
+        // REJECTED: Archive langsung, tanpa revisi catatan atau learning rule
+        archiveCarousel(db, id, note || 'rejected');
+        const archived = getCarousel(db, id);
+        const target = archived?.folder ?? archiveDestAbs;
+        if (target) void moveFolderOnDisk(currentFolder, target);
+      } else if (decision === 'changes_requested') {
+        // CHANGES REQUESTED: Catat revisi sebagai bahan pembelajaran
         recordRevision(db, {
           carouselId: id,
           categoryKey: row.category_key,
           title: row.title,
-          decision: decision === 'rejected' ? 'rejected' : 'changes_requested',
+          decision: 'changes_requested',
           note,
         });
 
-        // 2. Ubah catatan menjadi aturan yang akan dipakai produksi berikutnya.
-        //    Aturan dari manusia langsung dipercaya penuh, tidak menunggu
-        //    pengulangan.
+        // Ubah catatan menjadi aturan untuk produksi berikutnya
         const ruleId = `lr_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
         const now = new Date().toISOString();
         upsertLearnedRule(db, {
           id: ruleId,
           categoryKey: isCategoryKey(row.category_key) ? (row.category_key as CategoryKey) : null,
           rule: `Perbaiki hal berikut: ${note}`,
-          rationale: `Catatan ${decision === 'rejected' ? 'penolakan' : 'revisi'} pada carousel "${row.title}".`,
+          rationale: `Catatan revisi pada carousel "${row.title}".`,
           occurrences: 1,
           confidence: 0.9,
           createdBy: 'human',
@@ -871,21 +875,17 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
           active: true,
         });
         revised.learnedRuleId = ruleId;
+      }
 
-        // 3. Archive rejected carousels automatically (DB + disk)
-        if (decision === 'rejected') {
-          archiveCarousel(db, id, 'rejected');
-          // Ensure files are moved to the archived folder (archiveCarousel set folder already)
-          const archived = getCarousel(db, id);
-          const target = archived?.folder ?? archiveDestAbs;
-          if (target) void moveFolderOnDisk(currentFolder, target);
-        }
+      // Kondisional block: hanya jalankan perbaikan jika changes_requested
+      if (decision === 'rejected') {
+        // Rejected: tidak ada perbaikan, langsung selesai
+      } else if (decision === 'changes_requested') {
 
-        // 4. Jalankan perbaikan bila diminta. Produksi ulang memakai catatan
-        //    revisi sebagai permintaan khusus, sehingga hasilnya benar-benar
-        //    menanggapi catatan itu — bukan sekadar mengulang produksi lama.
-        //    HANYA untuk changes_requested, BUKAN untuk rejected.
-        if (decision === 'changes_requested' && body.autoRevise === true) {
+        // Jalankan perbaikan bila diminta. Produksi ulang memakai catatan
+        // revisi sebagai permintaan khusus, sehingga hasilnya benar-benar
+        // menanggapi catatan itu — bukan sekadar mengulang produksi lama.
+        if (body.autoRevise === true) {
           const ratios = (body.ratios ?? ['ig_portrait']).filter((r): r is RatioProfile => r in RATIO_PROFILES);
           const newCarouselId = randomUUID();
           revised.newCarouselId = newCarouselId;
