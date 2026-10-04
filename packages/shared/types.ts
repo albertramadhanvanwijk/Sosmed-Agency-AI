@@ -475,12 +475,64 @@ export interface CallToAction {
   headline: string;
   /** Penjelasan tambahan; opsional. */
   detail?: string;
-  /** Kode promo yang perlu ditonjolkan; hanya untuk `promo`. */
+  /** @deprecated — pakai `promoCodes`; disimpan untuk migrasi baca data lama. */
   promoCode?: string;
+  /** Kode promo yang perlu ditonjolkan; hanya untuk `promo` 1..5. */
+  promoCodes?: string[];
   /** Batas waktu promo dalam format YYYY-MM-DD; hanya untuk `promo`. */
   validUntil?: string;
   /** Nama komunitas atau kanal; untuk `community`. */
   communityName?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Naskah Gate 1 — polymorphic manuscript (SCHEMA_VERSION 6)
+// ---------------------------------------------------------------------------
+
+/** Naskah kategori edukasi & market_info — angle + narasi + caption Gate 1. */
+export interface ManuscriptEdukasiInfo {
+  title: string;
+  angle: string;
+  keyMessages: string[];
+  narrative: string;
+  caption: { hook: string; body: string; hashtags: string[]; cta: string };
+  disclaimerKey?: string;
+  asOf?: string;
+  sourceRefs?: string[];
+  cta?: CallToAction;
+}
+
+/** Naskah kategori jurnal — hanya hook & CTA (3 opsi). */
+export interface ManuscriptJurnal {
+  title: string;
+  hookOptions: [string, string, string];
+  selectedHookIndex: number;
+  cta: CallToAction;
+}
+
+/** Naskah kategori outlook — hook + gallery meta. */
+export interface ManuscriptOutlook {
+  title: string;
+  hookOptions: [string, string, string];
+  selectedHookIndex: number;
+  galleryCount: number;
+  cta: CallToAction;
+  timeframe?: string | null;
+}
+
+/** Payload polymorphic untuk kolom `manuscript_json`. */
+export type ManuscriptPayload = ManuscriptEdukasiInfo | ManuscriptJurnal | ManuscriptOutlook | Record<string, unknown>;
+
+/** Satu baris riwayat versi naskah. */
+export interface ManuscriptVersionRow {
+  id: string;
+  carouselId: string;
+  version: number;
+  manuscriptJson: string | null;
+  materiRaw: string | null;
+  editedBy: string | null;
+  note: string | null;
+  createdAt: string;
 }
 
 /** Gambar yang diunggah pengguna untuk disisipkan ke slide. */

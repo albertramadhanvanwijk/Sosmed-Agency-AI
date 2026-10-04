@@ -26,8 +26,13 @@ export type CarouselStatus =
   | 'drafting'
   | 'designing'
   | 'needs_review'
+  | 'manuscript_needs_review'
+  | 'manuscript_approved'
+  | 'manuscript_changes_requested'
+  | 'design_changes_requested'
   | 'changes_requested'
   | 'approved'
+  | 'ready_to_publish'
   | 'rejected'
   | 'archived'
   | 'failed';
@@ -65,6 +70,13 @@ export interface CarouselRow {
   extra_instructions: string | null;
   /** Ajakan bertindak (CTA) yang dipilih pengguna, disimpan sebagai JSON. */
   call_to_action: string | null;
+  /** Naskah Gate 1 (polymorphic JSON). */
+  manuscript_json: string | null;
+  manuscript_version: number;
+  manuscript_locked: number;
+  manuscript_updated_at: string | null;
+  materi_raw: string | null;
+  materi_links: string | null;
   /** Waktu carousel diarsipkan. */
   archived_at: string | null;
   /** Alasan carousel diarsipkan. */
@@ -151,7 +163,7 @@ export interface KnowledgeRow {
 
 const ORG_ID = 'org_default';
 const CLIENT_ID = 'client_default';
-const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 6;
 
 /**
  * Menghapus data contoh dari basis data.
@@ -568,6 +580,56 @@ export function openDb(dbPath: string): DatabaseSync {
         }
       } catch { /* tabel belum ada — akan dibuat oleh CREATE IF NOT EXISTS */ }
     }
+    if (cur < 5) {
+      // Tambahkan kolom call_to_action untuk menyimpan CTA yang dipilih pengguna
+      try { db.exec('ALTER TABLE carousels ADD COLUMN call_to_action TEXT'); } catch { /* kolom sudah ada */ }
+    }
+    if (cur < 6) {
+      // SCHEMA_VERSION 6 — manuscript kolom + materi + versions + promoCodes shape migration
+      for (const sql of [
+        'ALTER TABLE carousels ADD COLUMN manuscript_json TEXT',
+        'ALTER TABLE carousels ADD COLUMN manuscript_version INTEGER DEFAULT 0',
+        'ALTER TABLE carousels ADD COLUMN manuscript_locked INTEGER DEFAULT 0',
+        'ALTER TABLE carousels ADD COLUMN manuscript_updated_at TEXT',
+        'ALTER TABLE carousels ADD COLUMN materi_raw TEXT',
+        'ALTER TABLE carousels ADD COLUMN materi_links TEXT',
+      ]) { try { db.exec(sql); } catch { /* kolom sudah ada */ } }
+
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS manuscript_versions (
+          id TEXT PRIMARY KEY,
+          carousel_id TEXT NOT NULL,
+          version INTEGER NOT NULL,
+          manuscript_json TEXT,
+          materi_raw TEXT,
+          edited_by TEXT,
+          note TEXT,
+          created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_manuscript_versions_carousel ON manuscript_versions(carousel_id, version);
+      `);
+
+      // Migrate legacy promoCode → promoCodes in call_to_action + cta_presets
+      try {
+        const rows = db.prepare('SELECT id, call_to_action FROM carousels WHERE call_to_action IS NOT NULL').all() as unknown as { id: string; call_to_action: string }[];
+        for (const r of rows) {
+          try {
+            const obj = JSON.parse(r.call_to_action) as Record<string, unknown>;
+            if (typeof obj.promoCode === 'string' && (obj as Record<string, unknown>).promoCodes === undefined) {
+              const code = String(obj.promoCode).trim();
+              if (code) obj.promoCodes = [code];
+              delete obj.promoCode;
+              db.prepare('UPDATE carousels SET call_to_action = ? WHERE id = ?').run(JSON.stringify(obj), r.id);
+            }
+          } catch { /* skip bad JSON */ }
+        }
+      } catch { /* ignore */ }
+      try {
+        // cta_presets migration: single promo_code → if needed keep as-is (no array column); legacy column stays
+        // No structural change needed for cta_presets — promo_code remains single string there; template uses promoCodes array from call_to_action.
+        void 0;
+      } catch { /* ignore */ }
+    }
     db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('schema_version', String(SCHEMA_VERSION));
   } catch { /* jangan blokir openDb karena migrasi gagal */ }
 
@@ -959,7 +1021,7 @@ export function archiveCarousel(
   } catch {
     row = undefined;
   }
-  const dateStr = now.split('T')[0].replace(/-/g, '');
+  const dateStr = (now.split('T')[0] ?? now).replace(/-/g, '');
   const sanitized = safeReason.toLowerCase().replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'archived';
   const truncated = sanitized.slice(0, 50);
   const folder = row?.category_key ? `output/archive/${row.category_key}_${dateStr}_${truncated}/` : null;
@@ -985,14 +1047,14 @@ function slugify(input: string): string {
 }
 
 export function buildApproveFolderName(categoryKey: string, dateIso: string, title: string): string {
-  const dateStr = dateIso.split('T')[0].replace(/-/g, '');
+  const dateStr = (dateIso.split('T')[0] ?? dateIso).replace(/-/g, '');
   const slug = slugify(title).slice(0, 40).replace(/_$/g, '') || 'content';
   const raw = `${categoryKey}_${dateStr}_${slug}`;
   return raw.length <= 100 ? raw : raw.slice(0, 100).replace(/_+$/g, '');
 }
 
 export function buildArchiveFolderName(categoryKey: string, dateIso: string, reason: string): string {
-  const dateStr = dateIso.split('T')[0].replace(/-/g, '');
+  const dateStr = (dateIso.split('T')[0] ?? dateIso).replace(/-/g, '');
   const safe = reason.trim().slice(0, 50).replace(/[^a-zA-Z0-9_-]/g, '_') || 'archived';
   const sanitized = safe.toLowerCase().replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'archived';
   const truncated = sanitized.slice(0, 50);
@@ -1986,6 +2048,111 @@ export function listUploadedImages(db: DatabaseSync, carouselId?: string): {
     dataUri: String(r.data_uri),
     slidePosition: r.slide_position === null ? null : Number(r.slide_position),
     caption: r.caption === null ? null : String(r.caption),
+    createdAt: String(r.created_at),
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// Manuscript Gate 1 — SCHEMA_VERSION 6 helpers
+// ---------------------------------------------------------------------------
+
+const PROMO_CODE_RE = /^[A-Z0-9_-]{3,20}$/;
+
+/** CTA validator sesuai spec: 1 konten=1 CTA, promoCodes hanya kind==='promo' 1..5 × 3..20 A-Z0-9_- */
+export function validateCallToAction(cta: unknown): { ok: boolean; error?: string } {
+  if (!cta || typeof cta !== 'object') return { ok: false, error: 'CTA harus objek.' };
+  const o = cta as Record<string, unknown>;
+  if (typeof o.kind !== 'string' || !['save','follow','community','promo','consult'].includes(String(o.kind))) {
+    return { ok: false, error: 'CTA kind tidak dikenal.' };
+  }
+  if (typeof o.headline !== 'string' || !String(o.headline).trim()) return { ok: false, error: 'CTA headline wajib diisi.' };
+  const hasPromoCodes = o.promoCodes !== undefined && o.promoCodes !== null;
+  if (hasPromoCodes) {
+    if (o.kind !== 'promo') return { ok: false, error: 'Hanya CTA promo boleh multi kode.' };
+    if (!Array.isArray(o.promoCodes)) return { ok: false, error: 'promoCodes harus array.' };
+    const arr = o.promoCodes as unknown[];
+    if (arr.length < 1 || arr.length > 5) return { ok: false, error: 'promoCodes harus 1..5.' };
+    for (const c of arr) {
+      if (typeof c !== 'string' || !PROMO_CODE_RE.test(c)) return { ok: false, error: 'Kode promo 3-20 karakter A-Z0-9_-.' };
+    }
+  }
+  // legacy single promoCode still accepted as fallback
+  if (typeof o.promoCode === 'string' && o.promoCode.trim()) {
+    if (o.kind !== 'promo') return { ok: false, error: 'Hanya CTA promo boleh multi kode.' };
+    if (!PROMO_CODE_RE.test(o.promoCode.trim())) return { ok: false, error: 'Kode promo 3-20 karakter A-Z0-9_-.' };
+  }
+  if (o.validUntil !== undefined && o.validUntil !== null && typeof o.validUntil === 'string' && o.validUntil.trim()) {
+    const d = Date.parse(o.validUntil);
+    if (Number.isNaN(d)) return { ok: false, error: 'validUntil harus tanggal YYYY-MM-DD.' };
+  }
+  return { ok: true };
+}
+
+/** Migrasi legacy CTA string → objek dengan promoCodes array. */
+export function migrateCallToAction(raw: string | null): CallToAction | null {
+  if (raw === null || raw === undefined) return null;
+  const trimmed = String(raw).trim();
+  if (!trimmed) return null;
+  try {
+    const obj = JSON.parse(trimmed) as Record<string, unknown>;
+    if (obj && typeof obj === 'object') {
+      if (typeof obj.promoCode === 'string' && (obj as Record<string, unknown>).promoCodes === undefined) {
+        const c = String(obj.promoCode).trim();
+        if (c) (obj as Record<string, unknown>).promoCodes = [c];
+        delete (obj as Record<string, unknown>).promoCode;
+      }
+      return obj as unknown as CallToAction;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/** Kategori yang perlu cek similaritas (Edukasi/Info only; Jurnal/Outlook skip). */
+const SIMILARITY_CHECK_CATEGORIES = new Set<string>(['edukasi_trading','edukasi_propfirm','market_info']);
+export function shouldCheckSimilarity(categoryKey: string): boolean {
+  return SIMILARITY_CHECK_CATEGORIES.has(categoryKey);
+}
+
+/** Ambil manuscript_json sebuah carousel (parsed) atau null. */
+export function getManuscript(db: DatabaseSync, id: string): Record<string, unknown> | null {
+  const row = db.prepare('SELECT manuscript_json FROM carousels WHERE id = ?').get(id) as { manuscript_json: string | null } | undefined;
+  if (!row || row.manuscript_json === null || row.manuscript_json === undefined) return null;
+  try { return JSON.parse(row.manuscript_json) as Record<string, unknown>; } catch { return null; }
+}
+
+/** Simpan manuscript_json + buat versi + bump manuscript_version. */
+export function saveManuscript(
+  db: DatabaseSync,
+  id: string,
+  payload: Record<string, unknown>,
+  opts: { editedBy?: string | null; note?: string | null } = {},
+): void {
+  const now = new Date().toISOString();
+  const cur = db.prepare('SELECT manuscript_version, manuscript_json, materi_raw FROM carousels WHERE id = ?').get(id) as
+    | { manuscript_version: number | null; manuscript_json: string | null; materi_raw: string | null }
+    | undefined;
+  if (!cur) throw new Error('Carousel tidak ditemukan.');
+  const nextVersion = (cur.manuscript_version ?? 0) + 1;
+  const verId = `mv_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+  db.prepare(
+    'INSERT INTO manuscript_versions (id, carousel_id, version, manuscript_json, materi_raw, edited_by, note, created_at) VALUES (?,?,?,?,?,?,?,?)',
+  ).run(verId, id, nextVersion, JSON.stringify(payload), cur.materi_raw ?? null, opts.editedBy ?? null, opts.note ?? null, now);
+  db.prepare('UPDATE carousels SET manuscript_json = ?, manuscript_version = ?, manuscript_updated_at = ? WHERE id = ?').run(
+    JSON.stringify(payload), nextVersion, now, id,
+  );
+}
+
+/** Daftar versi naskah sebuah carousel, terurut. */
+export function listManuscriptVersions(db: DatabaseSync, carouselId: string): { id: string; carouselId: string; version: number; manuscriptJson: string | null; materiRaw: string | null; editedBy: string | null; note: string | null; createdAt: string }[] {
+  const rows = db.prepare('SELECT id, carousel_id, version, manuscript_json, materi_raw, edited_by, note, created_at FROM manuscript_versions WHERE carousel_id = ? ORDER BY version').all(carouselId) as unknown as Record<string, unknown>[];
+  return rows.map((r) => ({
+    id: String(r.id), carouselId: String(r.carousel_id), version: Number(r.version),
+    manuscriptJson: r.manuscript_json === null ? null : String(r.manuscript_json),
+    materiRaw: r.materi_raw === null ? null : String(r.materi_raw),
+    editedBy: r.edited_by === null ? null : String(r.edited_by),
+    note: r.note === null ? null : String(r.note),
     createdAt: String(r.created_at),
   }));
 }
