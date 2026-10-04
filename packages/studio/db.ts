@@ -144,6 +144,8 @@ export interface JobRow {
   current_step: string | null;
   progress: number;
   error: string | null;
+  job_type?: string | null;
+  jobType?: string | null;
   created_at: string;
   finished_at: string | null;
 }
@@ -336,6 +338,7 @@ export function openDb(dbPath: string): DatabaseSync {
       current_step TEXT,
       progress REAL NOT NULL DEFAULT 0,
       error TEXT,
+      job_type TEXT,
       created_at TEXT NOT NULL,
       finished_at TEXT
     );
@@ -626,9 +629,10 @@ export function openDb(dbPath: string): DatabaseSync {
       } catch { /* ignore */ }
       try {
         // cta_presets migration: single promo_code → if needed keep as-is (no array column); legacy column stays
-        // No structural change needed for cta_presets — promo_code remains single string there; template uses promoCodes array from call_to_action.
         void 0;
       } catch { /* ignore */ }
+      // Add job_type column to existing jobs table (for pre-v6 DBs)
+      try { db.exec('ALTER TABLE jobs ADD COLUMN job_type TEXT'); } catch { /* already exists */ }
     }
     db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run('schema_version', String(SCHEMA_VERSION));
   } catch { /* jangan blokir openDb karena migrasi gagal */ }
@@ -1574,11 +1578,17 @@ function stepBelongsToAgent(stepKey: string, agentKey: string): boolean {
 /** Membuat job baru. */
 export function createJob(
   db: DatabaseSync,
-  job: { id: string; carouselId: string; categoryKey: string; topic: string },
+  job: { id: string; carouselId: string; categoryKey: string; topic: string; jobType?: string },
 ): void {
-  db.prepare(
-    'INSERT INTO jobs (id, carousel_id, category_key, topic, status, current_step, progress, created_at) VALUES (?,?,?,?,?,?,?,?)',
-  ).run(job.id, job.carouselId, job.categoryKey, job.topic, 'queued', null, 0, new Date().toISOString());
+  try {
+    db.prepare(
+      'INSERT INTO jobs (id, carousel_id, category_key, topic, status, current_step, progress, job_type, created_at) VALUES (?,?,?,?,?,?,?,?,?)',
+    ).run(job.id, job.carouselId, job.categoryKey, job.topic, 'queued', null, 0, job.jobType ?? null, new Date().toISOString());
+  } catch {
+    db.prepare(
+      'INSERT INTO jobs (id, carousel_id, category_key, topic, status, current_step, progress, created_at) VALUES (?,?,?,?,?,?,?,?)',
+    ).run(job.id, job.carouselId, job.categoryKey, job.topic, 'queued', null, 0, new Date().toISOString());
+  }
 }
 
 /** Memperbarui kemajuan job. */
