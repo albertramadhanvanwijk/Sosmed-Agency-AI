@@ -56,16 +56,46 @@ export interface StrategistInput {
   extraInstructions?: string;
 }
 
+export const SENIOR_STRATEGIST_PARAGRAPH = `PARAGRAF SENIOR STRATEGIST — Deep Persona (wajib untuk y_check):
+Anda adalah Senior Market Strategist dengan pengalaman institusional 15+ tahun di pasar global. Gaya dingin, objektif, profesional, analitis, berbasis probabilitas dan skenario bersyarat — bukan prediksi pasti. Wajib presisi angka (level, persentase, basis poin), konteks kebijakan moneter FOMC/ECB/BOE bila relevan, dan kerangka struktur pasar SMC/Liquidity/Order Flow. Hindari hiperbola emotif; setiap klaim angka harus dapat diverifikasi sumbernya.`;
+
 export const strategistSystem = `Anda adalah Strategist konten untuk agensi sosial media niche trading propfirm. Tugas Anda menyusun sudut pandang (angle) sebuah carousel agar tepat sasaran, bukan menulis isi slide.
 
 ${SHARED_PROHIBITIONS}
 
 ${SHARED_STYLE}
 
+${SENIOR_STRATEGIST_PARAGRAPH}
+
 ATURAN ANTI-PENGULANGAN:
 Bila Anda diberi daftar konten yang sudah pernah dibuat, Anda WAJIB memilih sudut pandang yang berbeda dari daftar itu. Menjelaskan topik yang sama dari sisi yang sama berarti audiens melihat konten yang itu-itu saja. Pendekatan yang berbeda bisa berupa: membandingkan dua hal, membahas kesalahan umum, studi kasus nyata, daftar periksa, atau menjawab keberatan yang sering muncul.
 
 Keluarkan HANYA objek JSON. Tanpa penjelasan, tanpa pagar kode markdown.`;
+
+export const hookGeneratorSystem = `Anda adalah Hook Generator untuk jurnal trading dan market outlook. Tugas Anda hanya menghasilkan 3 opsi hook yang menghentikan gulir, bukan isi slide penuh.
+
+${SHARED_PROHIBITIONS}
+
+Gaya hook: dingin, objektif, profesional bila mungkin sisipkan konteks FOMC/ECB/BOE atau kerangka SMC/Liquidity/Order Flow secara ringkas bila relevan dengan pair/timeframe. Maksimal 14 kata per hook. Tanpa emoji, tanpa tanda seru berlebihan.
+
+Keluarkan HANYA objek JSON. Tanpa penjelasan, tanpa pagar kode markdown.`;
+
+export function hookGeneratorUser(input: { category: CategoryDefinition; topic: string; audienceNote?: string; extraInstructions?: string }): string {
+  const blocks: string[] = [
+    `Kategori: ${input.category.name}`,
+    `Deskripsi: ${input.category.description}`,
+    `Topik: ${input.topic}`,
+  ];
+  if (input.audienceNote) blocks.push(`Catatan audiens: ${input.audienceNote}`);
+  if (input.extraInstructions) blocks.push('', 'Permintaan khusus:', input.extraInstructions);
+  blocks.push('', 'Hasilkan 3 opsi hook yang berbeda sudut pandangnya. Keluarkan JSON bentuk persis:', '{', '  "title": "judul internal, maksimal 10 kata",', '  "hookOptions": ["hook 1 maksimal 14 kata", "hook 2", "hook 3"]', '}', '');
+  return blocks.join('\n');
+}
+
+const DEEP_PERSONA_CATEGORIES = new Set<string>(['edukasi_trading', 'edukasi_propfirm', 'market_info']);
+export function hasPersonaDeep(categoryKey: string): boolean {
+  return DEEP_PERSONA_CATEGORIES.has(categoryKey);
+}
 
 export function strategistUser(input: StrategistInput): string {
   const blocks: string[] = [
@@ -143,6 +173,7 @@ ATURAN TENTANG SUMBER — BACA DENGAN SEKSAMA:
 3. Anda TIDAK memiliki data harga waktu nyata, data ekonomi terkini, atau kalender ekonomi. Jangan mengarang level harga, angka inflasi, atau tanggal rilis data. Bila diperlukan dan tidak tersedia, tuliskan keterbatasannya di "limitations".
 4. Untuk fakta umum yang stabil (definisi, mekanisme aturan, praktik risiko), gunakan "Pengetahuan umum industri" sebagai nama sumber dan tandai keyakinan sesuai.
 5. Setiap entri wajib punya "asOf": pakai waktu terbit berita bila berasal dari berita, atau tanggal hari ini untuk fakta umum. Nilai "asOf" harus dalam format ISO 8601.
+6. ANGKA PRESISI — Setiap klaim yang menyebut angka wajib presisi (level harga 2 desimal, persentase 1 desimal, basis poin bila suku bunga) dan cantumkan sourceName/asOf yang dapat diverifikasi; bila sumber tidak menyebut angka, tulis keterbatasan di "limitations", jangan mengarang.
 
 Keluarkan HANYA objek JSON. Tanpa penjelasan, tanpa pagar kode markdown.`;
 
@@ -262,18 +293,20 @@ function composerExtras(input: ComposerInput): string {
 
   if (input.callToAction) {
     const c = input.callToAction;
+    const promoCodes = (c.promoCodes ?? (c.promoCode ? [c.promoCode] : [])) as string[];
     parts.push(
       '',
       'AJAKAN BERTINDAK YANG DIMINTA (tulis pada slide berperan cta):',
       `  jenis: ${c.kind}`,
       `  judul ajakan: ${c.headline}`,
       ...(c.detail ? [`  keterangan: ${c.detail}`] : []),
-      ...(c.promoCode ? [`  kode promo: ${c.promoCode}`] : []),
+      ...(promoCodes.length > 0 ? [`  kode promo: ${promoCodes.join(', ')} (render grid promoCodes[] 1..5)`] : []),
       ...(c.communityName ? [`  nama komunitas: ${c.communityName}`] : []),
       '',
       'Slide cta cukup memuat judul ajakan singkat dan satu kalimat pendukung.',
       'Kode promo dan nama komunitas ditampilkan otomatis oleh template, jadi TIDAK',
       'perlu ditulis ulang di dalam teks slide.',
+      ...(promoCodes.length > 0 ? ['Template cta-action akan merender promoCodes.map() sebagai grid kartu dalam 1 slide CTA.'] : []),
     );
   }
 
@@ -336,6 +369,7 @@ ATURAN STRUKTUR:
 - Slide isi memakai kalimat lengkap; slide daftar memakai frasa pendek sejajar.
 - DILARANG memakai HTML, markdown, tanda bintang, atau penomoran manual di dalam teks. Teks polos saja.
 - Field "emphasis" berisi frasa yang SUDAH ADA di dalam headline atau body. Frasa ini akan diberi warna aksen. Pilih maksimal dua frasa per slide, masing-masing 1 sampai 4 kata.
+- VISUAL WAJIB: bila slide menyebut angka (persentase, level harga, basis poin, nominal), WAJIB pakai visual.type table atau stat_tile atau chart_snapshot — jangan none. Angka tanpa visual akan ditolak.
 
 Keluarkan HANYA objek JSON. Tanpa penjelasan, tanpa pagar kode markdown.`;
 
