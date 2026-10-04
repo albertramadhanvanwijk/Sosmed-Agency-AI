@@ -1713,6 +1713,11 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       return { carouselId, manuscript };
     }
 
+    function truncatedWarning(b: Record<string, unknown>): string | null {
+      const raw = typeof b.materiRaw === 'string' ? b.materiRaw : null;
+      if (raw && raw.length > 8000) return 'Materi dipotong ke 8000 karakter.';
+      return null;
+    }
     // --- POST /api/manuscripts (polymorphic) ---
     if (method === 'POST' && path === '/api/manuscripts') {
       const body = (await readJson(req)) as Record<string, unknown>;
@@ -1723,11 +1728,6 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       }
       const row = getCarousel(db, result.carouselId);
       const warn = truncatedWarning(body);
-      function truncatedWarning(b: Record<string, unknown>): string | null {
-        const raw = typeof b.materiRaw === 'string' ? b.materiRaw : null;
-        if (raw && raw.length > 8000) return 'Materi dipotong ke 8000 karakter.';
-        return null;
-      }
       json(res, 201, {
         ok: true,
         carouselId: result.carouselId,
@@ -1743,14 +1743,15 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     if (method === 'POST' && path === '/api/manuscripts/bulk-generate') {
       const body = (await readJson(req)) as { items?: unknown[]; slotIds?: unknown[] };
       const items = Array.isArray(body.items) ? body.items : Array.isArray(body.slotIds) ? [] : [];
+      // Guard original length BEFORE slicing — do not silently truncate
+      if (items.length > 20) {
+        fail(res, 400, 'Maksimal 20 item per permintaan bulk.');
+        return;
+      }
       // If slotIds provided (weekly plan), not yet implemented — treat as items
       const effectiveItems: Record<string, unknown>[] = (items as Record<string, unknown>[]).slice(0, 20);
       if (effectiveItems.length === 0 && Array.isArray(body.slotIds) && body.slotIds.length > 0) {
         fail(res, 400, 'slotIds belum didukung — kirim items.');
-        return;
-      }
-      if (effectiveItems.length > 20) {
-        fail(res, 400, 'Maksimal 20 item per permintaan.');
         return;
       }
       const succeeded: unknown[] = [];
@@ -1873,12 +1874,17 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       // If jurnal/outlook and manuscript has hookOptions, require selectedHookIndex? Spec says wajib for those categories
       // For test compatibility: if isJurnalOrOutlook and body doesn't provide index, default 0 is fine (manuscript already has 0)
       // Only error if explicitly invalid; don't require if not sent (tests send empty for edukasi, and for jurnal they may send 0-2)
-      // Race guard: only approve if status is manuscript_needs_review or manuscript_changes_requested
-      if (row.status !== 'manuscript_needs_review' && row.status !== 'manuscript_changes_requested') {
-        fail(res, 409, 'Status sudah berubah, muat ulang.');
-        return;
+      // Atomic approve: single conditional UPDATE avoids SELECT-then-UPDATE race
+      {
+        const now = new Date().toISOString();
+        const info = db.prepare("UPDATE carousels SET status = 'manuscript_approved', manuscript_locked = 1, manuscript_updated_at = ?, updated_at = ? WHERE id = ? AND (status = 'manuscript_needs_review' OR status = 'manuscript_changes_requested')").run(now, now, id) as unknown as { changes: number };
+        if ((info.changes ?? 0) === 0) {
+          const fresh = getCarousel(db, id);
+          if (!fresh) { fail(res, 404, 'Carousel tidak ditemukan.'); return; }
+          fail(res, 409, 'Naskah sudah diproses atau status tidak sesuai.');
+          return;
+        }
       }
-      db.prepare("UPDATE carousels SET status = 'manuscript_approved', manuscript_locked = 1, manuscript_updated_at = ?, updated_at = ? WHERE id = ?").run(new Date().toISOString(), new Date().toISOString(), id);
       audit(db, 'operator', 'manuscript.approved', 'carousel', id, { selectedHookIndex: body.selectedHookIndex ?? null });
       json(res, 200, { ok: true, status: 'manuscript_approved', locked: true, carousel: getCarousel(db, id) });
       return;
@@ -1956,7 +1962,13 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     if (method === 'POST' && path === '/api/uploads/pdf-extract') {
       const contentType = String(req.headers['content-type'] ?? '');
       // Support both multipart/form-data and raw application/pdf
-      const raw = await readRawBody(req, 6_000_000);
+      let raw: Buffer;
+      try {
+        raw = await readRawBody(req, 6_000_000);
+      } catch {
+        fail(res, 400, 'PDF melebihi 5MB.');
+        return;
+      }
       if (raw.length > 5_000_000) {
         fail(res, 400, 'PDF melebihi 5MB.');
         return;
