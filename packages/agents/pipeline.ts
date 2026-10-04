@@ -37,6 +37,7 @@ import type {
   CarouselSpec,
   CaptionSet,
   CategoryDefinition,
+  CategoryKey,
   ComplianceFinding,
   ComplianceReport,
   CostReport,
@@ -628,35 +629,6 @@ export async function produceManuscript(
   return { carouselId, manuscript, cost: costWithManuscript as unknown as CostReport };
 }
 
-function resolveDataUriMap(dbPath: string | undefined, carouselId: string): Map<string, string> {
-  const map = new Map<string, string>();
-  if (!dbPath) return map;
-  try {
-    const { DatabaseSync } = require('node:sqlite') as unknown as { DatabaseSync: unknown };
-    // Use dynamic import via function to avoid top-level require issues
-  } catch {}
-  try {
-    // Synchronous load via DatabaseSync directly (node:sqlite is available)
-    const { DatabaseSync: DS } = (() => { try { return require('node:sqlite'); } catch { return {} as Record<string, unknown>; } })() as { DatabaseSync: new (p: string) => { prepare: (s: string) => { all: (...a: unknown[]) => unknown[]; get: (...a: unknown[]) => unknown } } };
-    if (!DS) return map;
-    const db = new DS(dbPath);
-    try {
-      const rows = db.prepare('SELECT id, data_uri FROM uploaded_images WHERE carousel_id = ?').all(carouselId) as { id: string; data_uri: string }[];
-      for (const r of rows) map.set(r.id, r.data_uri);
-      // Also load via Studio helpers for jurnal/outlook linkage if needed
-      try {
-        const jRow = db.prepare('SELECT direction_image_id, execution_image_id, mark_image_id, performance_image_id, pair_image_id FROM jurnal_trading_data WHERE carousel_id = ?').get(carouselId) as Record<string, string | null> | undefined;
-        if (jRow) {
-          for (const v of Object.values(jRow)) if (typeof v === 'string' && v) {
-            // v is imageId, data_uri already in map
-          }
-        }
-      } catch {}
-    } finally { try { (db as unknown as { close: () => void }).close(); } catch {} }
-  } catch {}
-  return map;
-}
-
 function applyVisualFix(slides: Slide[], dataUriMap: Map<string, string>, categoryKey: string): void {
   // For each slide with chart_snapshot, resolve placeholder -> dataUri if possible
   // Build ordered list of available dataUris
@@ -891,7 +863,7 @@ export async function produceDesignFromManuscript(
   const blocking = previewIssues.filter((i) => i.severity === 'block');
   // Don't throw on blocking in design phase if visual fallback already handled — filter non-visual
   const nonVisualBlocking = blocking.filter((i) => !(i.message.includes('Tabel') || i.message.includes('Kartu') || i.message.includes('visual')));
-  if (nonVisualBlocking.length > 0 && false) {
+  if (nonVisualBlocking.length > 0) {
     throw new Error(['Teks slide melampaui batas template:', ...nonVisualBlocking.map((i) => `  slide ${i.slidePosition} (${i.field}): ${i.message}`)].join('\n'));
   }
 

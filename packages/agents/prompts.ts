@@ -19,7 +19,7 @@ import type { CallToAction, CategoryDefinition, SlideRole } from '../shared/type
 import { visualLimitsToPrompt } from '../templates/text-budget.ts';
 
 /** Versi kumpulan prompt. Naikkan bila ada perubahan yang memengaruhi hasil. */
-export const PROMPT_VERSION = 5;
+export const PROMPT_VERSION = 6;
 
 /** Larangan yang berlaku untuk SEMUA agen yang menulis teks. */
 export const SHARED_PROHIBITIONS = `LARANGAN MUTLAK (melanggar salah satu membuat keluaran ditolak):
