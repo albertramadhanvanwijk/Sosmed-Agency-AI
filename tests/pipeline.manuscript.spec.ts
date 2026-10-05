@@ -65,7 +65,7 @@ describe('Task 2: Pipeline Split — produceManuscript + produceDesignFromManusc
     assert.ok(narrative.includes('FOMC') || narrative.includes('SMC') || narrative.includes('Liquidity'), `narrative must contain persona phrase, got: ${narrative}`);
     assert.ok(res.cost, 'must return cost');
     // cost.manuscript or cost.totalUsd
-    const costAny = res.cost as Record<string, unknown>;
+    const costAny = res.cost as unknown as Record<string, unknown>;
     assert.ok(costAny.totalUsd !== undefined || costAny.manuscript !== undefined, 'cost must have manuscript cost');
 
     // verify persisted - db instance from test's openDb path; close before unlink

@@ -1026,7 +1026,8 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 
     const archiveMatch = /^\/api\/carousels\/([^/]+)\/archive$/.exec(path);
     if (method === 'POST' && archiveMatch) {
-      const id = archiveMatch[1];
+      const id = archiveMatch[1] as string;
+      if (!id) { fail(res, 400, 'ID tidak valid.'); return; }
       const body = (await readJson(req)) as { reason?: string };
       const rawReason = (body.reason ?? 'archived').trim();
       // Sanitasi: potong 50 karakter agar nama folder tidak melebihi batas filesystem (255 char)
@@ -1262,7 +1263,8 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
 
     const jurnalMatch = /^\/api\/jurnal-trading\/([^/]+)$/.exec(path);
     if (jurnalMatch) {
-      const carouselId = jurnalMatch[1];
+      const carouselId = jurnalMatch[1] as string;
+      if (!carouselId) { fail(res, 400, 'ID tidak valid.'); return; }
       if (method === 'GET') {
         const data = getJurnalTradingData(db, carouselId);
         json(res, 200, { ok: true, data });
@@ -2068,9 +2070,11 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       let text = '';
       let truncated = false;
       try {
-        // Try pdfjs-dist legacy build
+        // Try pdfjs-dist legacy build (optional dep — ignore type error when not installed)
         let pdfjs: unknown = null;
+        // @ts-expect-error optional dep, types not installed
         try { pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs'); } catch {}
+        // @ts-expect-error optional dep
         if (!pdfjs) { try { pdfjs = await import('pdfjs-dist'); } catch {} }
         if (pdfjs && (pdfjs as any).getDocument) {
           const doc = (pdfjs as any).getDocument({ data: pdfBytes });

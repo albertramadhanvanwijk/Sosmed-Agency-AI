@@ -55,11 +55,11 @@ test.describe('Wizard UI - 3 Category Forms', () => {
   test('Edukasi wizard: select kategori, type topic, paste 500 words, add 2 links, pick promo + 1 extra kode, submit', async ({ page }) => {
     // Navigate to create tab
     await page.click('[data-tab="create"]');
-    await page.evaluate(() => window.showTab('create'));
+    await page.evaluate(() => (window as any).showTab('create'));
     await page.waitForTimeout(500);
 
     // Switch to edukasi wizard via direct showWizard call (hashchange doesn't fire reliably in Playwright)
-    await page.evaluate(() => window.showWizard('wizard-edukasi'));
+    await page.evaluate(() => (window as any).showWizard('wizard-edukasi'));
     await page.waitForTimeout(500);
 
     // Verify edukasi wizard elements
@@ -123,7 +123,7 @@ test.describe('Wizard UI - 3 Category Forms', () => {
 
   test('Jurnal wizard: add 2 table rows, fill 3 descs + mock upload thumb, hookOptions radio 3 present', async ({ page }) => {
     await page.click('[data-tab="create"]');
-    await page.evaluate(() => window.showWizard('wizard-jurnal'));
+    await page.evaluate(() => (window as any).showWizard('wizard-jurnal'));
     await page.waitForTimeout(500);
 
     await expect(page.locator('#wizard-jurnal')).toBeVisible();
@@ -177,7 +177,7 @@ test.describe('Wizard UI - 3 Category Forms', () => {
 
   test('Outlook wizard: add 4 gallery items + reorder ↑↓, submit', async ({ page }) => {
     await page.click('[data-tab="create"]');
-    await page.evaluate(() => window.showWizard('wizard-outlook'));
+    await page.evaluate(() => (window as any).showWizard('wizard-outlook'));
     await page.waitForTimeout(500);
 
     await expect(page.locator('#wizard-outlook')).toBeVisible();
@@ -216,7 +216,7 @@ test.describe('Wizard UI - 3 Category Forms', () => {
 
   test('CTA grid: promo 3 codes → grid 3 cards, kind=community hides promo detail', async ({ page }) => {
     await page.click('[data-tab="create"]');
-    await page.evaluate(() => window.showWizard('wizard-edukasi'));
+    await page.evaluate(() => (window as any).showWizard('wizard-edukasi'));
     await page.waitForTimeout(500);
 
     // Test promo with 3 codes
@@ -250,7 +250,7 @@ test.describe('Wizard UI - 3 Category Forms', () => {
 
   test('Validation: empty topic submit → toast error, submit blocked', async ({ page }) => {
     await page.click('[data-tab="create"]');
-    await page.evaluate(() => window.showWizard('wizard-edukasi'));
+    await page.evaluate(() => (window as any).showWizard('wizard-edukasi'));
     await page.waitForTimeout(500);
 
     // Don't fill topic (required)

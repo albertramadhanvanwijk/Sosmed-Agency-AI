@@ -195,8 +195,8 @@ describe('Advanced Features Verification', () => {
     ];
 
     assert.strictEqual(history.length, 3, 'Should track multiple carousels');
-    assert.strictEqual(history[0].score, 1.0, 'Identical topic has score 1.0');
-    assert.ok(history[1].score < 1.0, 'Different topic has lower score');
+    assert.strictEqual(history[0]!.score, 1.0, 'Identical topic has score 1.0');
+    assert.ok(history[1]!.score < 1.0, 'Different topic has lower score');
   });
 
   test('similarity levels categorize warning severity', () => {
@@ -287,7 +287,7 @@ describe('Advanced Features Verification', () => {
       ]
     };
 
-    const slot = planWithNews.slots[0];
+    const slot = planWithNews.slots[0]!;
     assert.ok(slot.newsSourceUsed, 'Should indicate which news source was used');
     assert.ok(slot.reasoning.includes('news'), 'Reasoning should mention news');
   });

@@ -74,7 +74,7 @@ describe('Phase 2 Task 1: Archive Pipeline - Rejected Carousels', () => {
     
     // Archive naming: {category}_{YYYYMMDD}_{reason}
     const archiveFolderName = (cat: string, date: string, reason: string) => {
-      const dateStr = date.split('T')[0].replace(/-/g, '');
+      const dateStr = (date.split('T')[0] as string).replace(/-/g, '');
       return `${cat}_${dateStr}_${reason}`;
     };
 

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert';
 
@@ -12,7 +13,7 @@ describe('Revision Form Visibility', () => {
   // Mock DOM elements and state for testing
   let mockState: any;
   let mockCarousels: any[];
-  let domElements: Map<string, any>;
+  let domElements: Map<string, any> | any;
 
   beforeEach(() => {
     // Setup mock carousel data
@@ -33,7 +34,7 @@ describe('Revision Form Visibility', () => {
 
     // Mock DOM structure for drawer
     domElements = new Map();
-    domElements.set('drawer', {
+    (domElements as any).set('drawer', {
       classList: {
         add: function(cls: string) { 
           if (!this.classes) this.classes = [];
@@ -52,7 +53,7 @@ describe('Revision Form Visibility', () => {
       }
     });
 
-    domElements.set('drawer-i', {
+    (domElements as any).set('drawer-i', {
       appendChild: function(el: any) {
         if (!this.children) this.children = [];
         this.children.push(el);
@@ -60,7 +61,7 @@ describe('Revision Form Visibility', () => {
       textContent: ''
     });
 
-    domElements.set('backdrop', {
+    (domElements as any).set('backdrop', {
       classList: {
         add: function(cls: string) { 
           if (!this.classes) this.classes = [];
@@ -80,8 +81,9 @@ describe('Revision Form Visibility', () => {
     });
 
     // Mock getElementById
-    global.document = {
-      getElementById: (id: string) => domElements.get(id),
+    // @ts-ignore
+global.document = {
+      getElementById: (id: string) => (domElements as any).get(id),
       createElement: (tag: string) => ({
         tag,
         className: '',
