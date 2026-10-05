@@ -1271,7 +1271,6 @@ export async function produceCarousel(
         [/\bbebas risiko\b/gi, 'dianggap aman padahal tetap berisiko'],
         [/\buang kasino\b/gi, 'dana profit yang disalahartikan'],
         [/\bhouse money\b/gi, 'dana profit yang disalahartikan'],
-        [/\btanpa kerugian\b/gi, 'tanpa merealisasikan kerugian'],
       ];
       for (const slide of normalized) {
         for (const [re, replacement] of BANNED_REPLACEMENTS) {
