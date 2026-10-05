@@ -3,12 +3,17 @@
  *
  * Berkas ini hanya menyusun kerangka HTML dan menyatukan gaya (`ui-css.ts`)
  * dengan skrip (`ui-js.ts`). Memisahkannya membuat setiap bagian dapat
- * ditelusuri dan diubah sendiri-sendiri — pada versi sebelumnya semuanya berada
+ * ditelusuri dan diubah sendiri-sendiri \u2014 pada versi sebelumnya semuanya berada
  * dalam satu berkas besar, dan itu menyulitkan perawatan.
  */
 import { escapeHtml as esc } from './escape.ts';
 import { STUDIO_CSS } from './ui-css.ts';
-import { STUDIO_JS } from './ui-js.ts';
+import { readFileSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const STUDIO_JS = readFileSync(resolve(__dirname, 'static/studio.js'), 'utf8');
 
 /** Konfigurasi yang disuntikkan dari server. */
 export interface StudioConfig {
@@ -21,26 +26,26 @@ const NAV: { group: string; items: { tab: string; label: string; icon: string }[
   {
     group: 'Operasional',
     items: [
-      { tab: 'dashboard', label: 'Dashboard', icon: '▤' },
-      { tab: 'plan', label: 'Rencana Mingguan', icon: '▦' },
-      { tab: 'pipeline', label: 'Pipeline', icon: '▥' },
-      { tab: 'approvals', label: 'Persetujuan', icon: '✔' },
+      { tab: 'dashboard', label: 'Dashboard', icon: '\u25A4' },
+      { tab: 'plan', label: 'Rencana Mingguan', icon: '\u25A6' },
+      { tab: 'pipeline', label: 'Pipeline', icon: '\u25A5' },
+      { tab: 'approvals', label: 'Persetujuan', icon: '\u2714' },
     ],
   },
   {
     group: 'Konten',
     items: [
-      { tab: 'create', label: 'Buat Carousel', icon: '＋' },
-      { tab: 'office', label: 'Agent Office', icon: '◉' },
-      { tab: 'knowledge', label: 'Pengetahuan', icon: '◈' },
+      { tab: 'create', label: 'Buat Carousel', icon: '\uFF0B' },
+      { tab: 'office', label: 'Agent Office', icon: '\u25C9' },
+      { tab: 'knowledge', label: 'Pengetahuan', icon: '\u25C8' },
     ],
   },
   {
     group: 'Pengaturan',
     items: [
-      { tab: 'brand', label: 'Logo & Merek', icon: '◐' },
-      { tab: 'memory', label: 'Pembelajaran', icon: '✦' },
-      { tab: 'audit', label: 'Jejak Audit', icon: '☰' },
+      { tab: 'brand', label: 'Logo & Merek', icon: '\u25D0' },
+      { tab: 'memory', label: 'Pembelajaran', icon: '\u2726' },
+      { tab: 'audit', label: 'Jejak Audit', icon: '\u2630' },
     ],
   },
 ];
@@ -48,13 +53,13 @@ const NAV: { group: string; items: { tab: string; label: string; icon: string }[
 /** Membangun halaman Studio lengkap. */
 export function renderStudioHtml(config: StudioConfig): string {
   const categoryOptions = config.categories
-    .map((c) => `<option value="${esc(c.key)}">${esc(c.name)} — risiko ${esc(c.riskLevel)}</option>`)
+    .map((c) => `<option value="${esc(c.key)}">${esc(c.name)} \u2014 risiko ${esc(c.riskLevel)}</option>`)
     .join('');
 
   const ratioOptions = config.ratios
     .map(
       (r) =>
-        `<option value="${esc(r.key)}"${r.key === 'ig_portrait' ? ' selected' : ''}>${esc(r.label)} (${r.width}×${r.height})</option>`,
+        `<option value="${esc(r.key)}"${r.key === 'ig_portrait' ? ' selected' : ''}>${esc(r.label)} (${r.width}\u00D7${r.height})</option>`,
     )
     .join('');
 
@@ -75,7 +80,7 @@ export function renderStudioHtml(config: StudioConfig): string {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%233B82F6'/%3E%3Ctext x='16' y='22' font-family='Segoe UI,sans-serif' font-size='15' font-weight='800' text-anchor='middle' fill='%23fff'%3EPD%3C/text%3E%3C/svg%3E" />
-<title>PropDesk AI — Studio</title>
+<title>PropDesk AI \u2014 Studio</title>
 <style>${STUDIO_CSS}</style>
 </head>
 <body>
@@ -97,6 +102,8 @@ export function renderStudioHtml(config: StudioConfig): string {
   <div class="main">
     <header class="top">
       <div class="crumb"><span id="crumb-group">Operasional</span> / <b id="crumb-tab">Dashboard</b></div>
+      <span id="jobs-manuscript-badge" class="jobs-badge manuscript">0</span>
+      <span id="jobs-design-badge" class="jobs-badge design">0</span>
       <div class="spacer"></div>
       <button class="btn" id="btn-refresh">Muat Ulang</button>
       <button class="btn primary" id="btn-quick">Buat Carousel</button>
@@ -160,7 +167,13 @@ export function renderStudioHtml(config: StudioConfig): string {
         <div class="card">
           <div class="card-h"><h2>Hasil Rencana</h2><span class="sub" id="plan-meta"></span></div>
           <div class="card-b">
-            <div class="hint" style="margin-bottom:8px">Copy preview (copywriter) tampil di tiap slot — setujui copy untuk lewati agen copywriter saat produksi (skip copywriter), atau regenerate bila perlu.</div>
+            <div class="hint" style="margin-bottom:8px">Copy preview (copywriter) tampil di tiap slot \u2014 setujui copy untuk lewati agen copywriter saat produksi (skip copywriter), atau regenerate bila perlu.</div>
+            <div class="row" style="margin-bottom:10px; gap:8px; flex-wrap:wrap">
+              <button class="btn sm" id="bulk-generate-manuscript">Generate Naskah Terpilih</button>
+              <button class="btn sm" id="bulk-approve-manuscript">Approve Naskah Terpilih</button>
+              <button class="btn sm" id="bulk-generate-design">Generate Design Terpilih</button>
+              <button class="btn sm" id="bulk-approve-design">Approve Design Terpilih</button>
+            </div>
             <div id="plan-out"><div class="empty">Belum ada rencana. Klik "Susun Rencana".</div></div>
           </div>
         </div>
@@ -192,175 +205,227 @@ export function renderStudioHtml(config: StudioConfig): string {
         <div class="card">
           <div class="card-h"><h2>Buat Carousel Baru</h2><span class="sub">teks dari 9Router, gambar dirender lokal</span></div>
           <div class="card-b">
-            <div class="grid g3">
-              <div>
-                <label class="f">Kategori</label>
-                <select id="f-cat">${categoryOptions}</select>
-                <div class="hint" id="f-cat-hint"></div>
-              </div>
-              <div><label class="f">Profil Rasio</label><select id="f-ratio">${ratioOptions}</select></div>
-              <div><label class="f">Nama Merek</label><input id="f-brand" value="PropDesk" /></div>
+            <!-- Wizard Navigation -->
+            <div id="wizard-nav-buttons" class="wizard-nav" style="margin-bottom:16px; display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="btn" data-wizard="edukasi" id="wizard-nav-edukasi">Buat Edukasi/Info</button>
+              <button class="btn" data-wizard="jurnal" id="wizard-nav-jurnal">Buat Jurnal Trading</button>
+              <button class="btn" data-wizard="outlook" id="wizard-nav-outlook">Buat Market Outlook</button>
             </div>
 
-            <div style="margin-top:12px">
-              <label class="f">Topik</label>
-              <input id="f-topic" placeholder="mis. Perbedaan static drawdown dan trailing drawdown" />
-              <div id="sim-warn"></div>
+            <!-- Wizard: Edukasi & Market Info -->
+            <div id="wizard-edukasi" class="wizard-shell" style="display:none">
+              <div class="wizard-step" data-step="1">
+                <div class="fh">Langkah 1: Topik & Materi</div>
+                
+                <div class="grid g3" style="margin-top:12px">
+                  <div>
+                    <label class="f">Kategori *</label>
+                    <select id="edukasi-kategori">
+                      <option value="edukasi_trading">Edukasi Trading</option>
+                      <option value="edukasi_propfirm">Edukasi Propfirm</option>
+                      <option value="market_info">Market Info</option>
+                    </select>
+                  </div>
+                  <div><label class="f">Profil Rasio</label><select id="edukasi-ratio">${ratioOptions}</select></div>
+                  <div><label class="f">Nama Merek</label><input id="edukasi-brand" value="PropDesk" /></div>
+                </div>
+
+                <div style="margin-top:12px">
+                  <label class="f">Topik *</label>
+                  <input id="edukasi-topic" placeholder="mis. Dampak FOMC terhadap pasar forex" />
+                  <div id="edukasi-topic-hint" class="hint"></div>
+                </div>
+
+                <div style="margin-top:12px">
+                  <label class="f">Materi Pendukung \u2014 opsional</label>
+                  <div class="hint">Paste artikel, fetch link, atau upload PDF. Maksimal 8000 karakter total.</div>
+                  
+                  <div style="margin-top:8px">
+                    <label class="f">Paste Artikel</label>
+                    <textarea id="edukasi-materi" rows="6" placeholder="Tempel artikel atau tulis materi di sini..."></textarea>
+                    <div class="row" style="margin-top:4px; justify-content:flex-end;">
+                      <span id="edukasi-materi-counter" class="hint">0/8000</span>
+                    </div>
+                  </div>
+
+                  <div style="margin-top:12px">
+                    <label class="f">Link Referensi (maks 3)</label>
+                    <div id="edukasi-links" class="repeatable-container"></div>
+                    <div class="row" style="margin-top:8px; gap:8px;">
+                      <button class="btn sm" id="edukasi-add-link" type="button">+ Tambah Link</button>
+                      <span id="edukasi-links-hint" class="hint">Maksimal 3 link. Setiap link di-fetch untuk ambil title & snippet.</span>
+                    </div>
+                  </div>
+
+                  <div style="margin-top:12px">
+                    <label class="f">Upload PDF (maks 5 MB, 20 halaman)</label>
+                    <input type="file" id="edukasi-pdf" accept=".pdf" />
+                    <div class="hint">Teks diekstrak otomatis ke materi. Progress ditampilkan saat ekstraksi.</div>
+                    <div id="edukasi-pdf-progress" style="display:none; margin-top:6px;">
+                      <div class="loading-progress" style="height:4px;">
+                        <div class="loading-bar" id="edukasi-pdf-bar" style="width:0%"></div>
+                      </div>
+                      <span id="edukasi-pdf-status" class="hint"></span>
+                    </div>
+                    <div id="edukasi-pdf-warning" class="hint" style="color:var(--warn); display:none;"></div>
+                  </div>
+                </div>
+
+                <div style="margin-top:12px">
+                  <label class="f">Gambar Pendukung (opsional, maks 6 MB)</label>
+                  <input type="file" id="edukasi-images" accept="image/png,image/jpeg,image/webp,image/gif" multiple />
+                  <div class="hint">Thumbnail ditampilkan. Dipakai sebagai visual pendukung di slide.</div>
+                  <div class="uploads" id="edukasi-up-list"></div>
+                </div>
+              </div>
+
+              <div class="wizard-step" data-step="2" style="margin-top:16px; padding-top:16px; border-top:1px solid var(--line);">
+                <div class="fh">Langkah 2: CTA</div>
+                <div id="edukasi-cta-block"></div>
+              </div>
+
+              <div class="row" style="margin-top:16px">
+                <button class="btn primary" id="edukasi-submit" type="button">Mulai Buat Naskah \u2192</button>
+                <label class="row" style="gap:6px;color:var(--muted);font-size:12.5px">
+                  <input type="checkbox" id="edukasi-fresh" /> Abaikan cache
+                </label>
+                <div class="spacer"></div>
+                <span id="edukasi-produce-msg" style="font-size:12.5px;color:var(--muted)"></span>
+              </div>
             </div>
 
-            <div style="margin-top:12px">
-              <label class="f">Saran Tambahan agar Konten Lebih Informatif</label>
-              <textarea id="f-extra" rows="3" placeholder="mis. sertakan contoh perhitungan dengan angka, dan jelaskan kesalahan umum pemula"></textarea>
-              <div class="hint">Saran ini diprioritaskan agen di atas instruksi bawaannya.</div>
-            </div>
+            <!-- Wizard: Jurnal Trading -->
+            <div id="wizard-jurnal" class="wizard-shell" style="display:none">
+              <div class="wizard-step" data-step="1">
+                <div class="fh">Langkah 1: Tabel Trade</div>
+                <div class="fd">Minimal 1 baris. Pair wajib, Direction: long/short.</div>
 
-            <div style="margin-top:14px">
-              <label class="f">Ajakan Bertindak (CTA)</label>
-              <div class="grid g3">
-                <div>
-                  <select id="f-cta-kind">
-                    <option value="save">Minta simpan konten</option>
-                    <option value="follow">Minta ikuti akun</option>
-                    <option value="community">Ajakan gabung komunitas</option>
-                    <option value="promo">Pasang promo atau kode</option>
-                    <option value="consult">Ajakan konsultasi</option>
-                  </select>
+                <div class="grid g3" style="margin-top:12px">
+                  <div><label class="f">Pair Utama *</label><input id="jurnal-pair" placeholder="mis. EUR/USD, XAU/USD" /></div>
+                  <div><label class="f">Timeframe</label><input id="jurnal-timeframe" placeholder="mis. H1, H4, D1" /></div>
+                  <div><label class="f">Gambar Pair (opsional)</label><input type="file" id="jurnal-pair-file" accept="image/png,image/jpeg,image/webp,image/gif" /></div>
                 </div>
-                <div><input id="f-cta-head" placeholder="Kalimat ajakan utama" /></div>
-                <div><input id="f-cta-detail" placeholder="Keterangan tambahan (opsional)" /></div>
-              </div>
-              <div class="grid g2" style="margin-top:9px">
-                <div id="cta-promo-wrap" style="display:none">
-                  <label class="f">Kode Promo</label>
-                  <input id="f-cta-code" placeholder="mis. PROPDESK20" />
-                </div>
-                <div id="cta-valid-wrap" style="display:none">
-                  <label class="f">Berlaku Sampai</label>
-                  <input type="date" id="f-cta-valid" />
-                </div>
-                <div id="cta-comm-wrap" style="display:none">
-                  <label class="f">Nama Komunitas</label>
-                  <input id="f-cta-comm" placeholder="mis. Komunitas PropDesk" />
-                </div>
-              </div>
-              <div id="cta-presets" class="row" style="margin-top:9px"></div>
-            </div>
 
-            <div style="margin-top:14px">
-              <label class="f">Gambar untuk Disisipkan (opsional)</label>
-              <input type="file" id="f-files" accept="image/png,image/jpeg,image/webp,image/gif" multiple />
-              <div class="hint">Maksimal 6 MB per gambar. Gambar disisipkan ke slide dan dijelaskan oleh teks di sekitarnya.</div>
-              <div class="uploads" id="up-list"></div>
-            </div>
-
-            <!-- Jurnal Trading structured input (hanya tampil saat kategori jurnal_trading) -->
-            <div id="jurnal-panel" style="display:none; margin-top:18px; padding:14px; border:1px solid var(--line); border-radius:12px; background: var(--cat-bg, #FFFBEB)">
-              <div class="fh" style="font-weight:700">Jurnal Trading — Input Terstruktur</div>
-              <div class="fd" style="margin-top:4px; color:var(--muted)">Isi data pair, tabel trade, dan deskripsi. Data ini menjadi sumber kebenaran untuk slide; angka tidak akan dikarang.</div>
-
-              <div class="grid g3" style="margin-top:12px">
-                <div><label class="f">Pair Utama *</label><input id="j-pair" placeholder="mis. EUR/USD, XAU/USD" /></div>
-                <div><label class="f">Timeframe</label><input id="j-timeframe" placeholder="mis. H1, H4, D1" /></div>
-                <div><label class="f">Gambar Pair (opsional)</label><input type="file" id="j-pair-file" accept="image/png,image/jpeg,image/webp,image/gif" /></div>
-              </div>
-
-              <div style="margin-top:12px">
-                <label class="f">Tabel Trade — Pairs | Direction | Session | %Risk | RR | Confluence | PnL | Result</label>
-                <div class="hint">Ketik manual atau paste CSV (header otomatis). Contoh baris: EUR/USD, Buy, London, 1%, 1:2, OB+CT, 50, Profit</div>
-                <textarea id="j-table-csv" rows="4" placeholder="Paste CSV di sini atau isi tabel di bawah"></textarea>
-                <div class="row" style="gap:8px; margin-top:8px">
-                  <button class="btn sm" id="j-csv-import">Impor CSV</button>
-                  <button class="btn sm" id="j-row-add">+ Baris</button>
-                  <span id="j-table-msg" class="hint"></span>
-                </div>
-                <div id="j-table-wrap" style="margin-top:10px; overflow:auto">
-                  <table class="tbl" id="j-table" style="width:100%; min-width:720px">
-                    <thead><tr><th>Pairs</th><th>Direction</th><th>Session</th><th>%Risk</th><th>RR</th><th>Confluence</th><th>PnL</th><th>Result</th><th></th></tr></thead>
-                    <tbody id="j-tbody"></tbody>
-                  </table>
-                </div>
-              </div>
-
-              <div class="grid g2" style="margin-top:12px">
-                <div>
-                  <label class="f">Deskripsi Direction *</label>
-                  <textarea id="j-dir-desc" rows="3" placeholder="mis. Trend up H1, retest OB"></textarea>
-                  <input type="file" id="j-dir-file" accept="image/png,image/jpeg,image/webp,image/gif" style="margin-top:6px" />
-                  <div class="hint">Upload chart direction (opsional)</div>
-                </div>
-                <div>
-                  <label class="f">Deskripsi Execution *</label>
-                  <textarea id="j-exec-desc" rows="3" placeholder="mis. Entry London open, SL di bawah OB"></textarea>
-                  <input type="file" id="j-exec-file" accept="image/png,image/jpeg,image/webp,image/gif" style="margin-top:6px" />
-                  <div class="hint">Upload chart execution (opsional)</div>
-                </div>
-              </div>
-
-              <div class="grid g2" style="margin-top:12px">
-                <div>
-                  <label class="f">Deskripsi Mark/Setup *</label>
-                  <textarea id="j-mark-desc" rows="3" placeholder="mis. Tandai OB dan FVG"></textarea>
-                  <input type="file" id="j-mark-file" accept="image/png,image/jpeg,image/webp,image/gif" style="margin-top:6px" />
-                  <div class="hint">Upload mark image (opsional)</div>
-                </div>
-                <div>
-                  <label class="f">Performance (opsional) + Catatan Umum</label>
-                  <input type="file" id="j-perf-file" accept="image/png,image/jpeg,image/webp,image/gif" />
-                  <div class="hint">Upload performance chart (opsional)</div>
-                  <textarea id="j-general-notes" rows="3" placeholder="Catatan umum (opsional) — akan masuk ke extraInstructions" style="margin-top:8px"></textarea>
-                  <div class="row" style="gap:8px; margin-top:8px">
-                    <button class="btn sm" id="j-save">Simpan Jurnal</button>
-                    <span id="j-save-msg" class="hint"></span>
+                <div style="margin-top:12px">
+                  <label class="f">Tabel Trade</label>
+                  <div class="row" style="gap:8px; margin-top:4px; margin-bottom:8px;">
+                    <button class="btn sm" id="jurnal-add-row" type="button">+ Tambah Baris</button>
+                    <button class="btn sm" id="jurnal-csv-import" type="button">Impor CSV</button>
+                    <input type="file" id="jurnal-csv-file" accept=".csv" style="display:none" />
+                    <span id="jurnal-table-msg" class="hint"></span>
+                  </div>
+                  <div id="jurnal-table-wrap" style="overflow:auto">
+                    <table class="tbl" id="jurnal-table" style="width:100%; min-width:760px">
+                      <thead>
+                        <tr>
+                          <th>Pair *</th><th>Direction *</th><th>Session</th><th>%Risk</th>
+                          <th>RR</th><th>Confluence</th><th>PnL</th><th>Result</th><th></th>
+                        </tr>
+                      </thead>
+                      <tbody id="jurnal-tbody"></tbody>
+                    </table>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <!-- Market Outlook structured input (hanya tampil saat kategori market_outlook) -->
-            <div id="market-outlook-panel" class="market-outlook-panel outlook-panel" style="display:none; margin-top:18px; padding:14px; border:1px solid var(--line); border-radius:12px; background: var(--cat-bg, #FEF2F2)">
-              <div class="fh" style="font-weight:700">Market Outlook — Input Terstruktur</div>
-              <div class="fd" style="margin-top:4px; color:var(--muted)">Judul, timeframe, galeri chart dengan deskripsi, dan CTA. Urutan galeri penting untuk narasi skenario.</div>
-              <div class="grid g3" style="margin-top:12px">
-                <div><label class="f">Judul Outlook *</label><input id="o-title" placeholder="mis. Skenario EUR/USD pekan depan" /></div>
-                <div><label class="f">Timeframe</label><select id="o-timeframe"><option value="">—</option><option>H1</option><option>H4</option><option>D1</option><option>W1</option><option>MN</option></select></div>
-                <div><label class="f">Catatan Umum (opsional)</label><input id="o-notes" placeholder="catatan skenario / disclaimer tambahan" /></div>
-              </div>
-              <div style="margin-top:12px">
-                <label class="f">Galeri Chart — upload beberapa gambar + deskripsi per gambar</label>
-                <div class="hint">Urutan gambar menentukan alur skenario A/B. Drag handle untuk reorder (atau pakai tombol ↑↓).</div>
-                <input type="file" id="o-files" accept="image/png,image/jpeg,image/webp,image/gif" multiple style="margin-top:6px" />
-                <div id="o-gallery" style="margin-top:10px; display:flex; flex-direction:column; gap:8px"></div>
-              </div>
-              <div style="margin-top:12px">
-                <label class="f">CTA (bisa banyak) — jenis: Link / Promo Code / Join Community</label>
-                <div id="o-ctas" style="display:flex; flex-direction:column; gap:8px; margin-top:6px"></div>
-                <div class="row" style="gap:8px; margin-top:8px">
-                  <button class="btn sm" id="o-cta-add">+ CTA</button>
-                  <button class="btn sm" id="o-cta-add-promo">+ Kode Promo</button>
+              <div class="wizard-step" data-step="2" style="margin-top:16px; padding-top:16px; border-top:1px solid var(--line);">
+                <div class="fh">Langkah 2: Narasi Visual (4 Grup)</div>
+                <div class="fd">3 deskripsi wajib (Direction, Execution, Mark). Gambar opsional per grup.</div>
+
+                <div class="grid g2" style="margin-top:12px">
+                  <div class="repeatable-row">
+                    <label class="f">Deskripsi Direction *</label>
+                    <textarea id="jurnal-dir-desc" rows="3" placeholder="mis. Trend up H1, retest OB"></textarea>
+                    <input type="file" id="jurnal-dir-file" accept="image/png,image/jpeg,image/webp,image/gif" style="margin-top:6px" />
+                    <div class="hint">Upload chart direction (opsional)</div>
+                  </div>
+                  <div class="repeatable-row">
+                    <label class="f">Deskripsi Execution *</label>
+                    <textarea id="jurnal-exec-desc" rows="3" placeholder="mis. Entry London open, SL di bawah OB"></textarea>
+                    <input type="file" id="jurnal-exec-file" accept="image/png,image/jpeg,image/webp,image/gif" style="margin-top:6px" />
+                    <div class="hint">Upload chart execution (opsional)</div>
+                  </div>
+                </div>
+
+                <div class="grid g2" style="margin-top:12px">
+                  <div class="repeatable-row">
+                    <label class="f">Deskripsi Mark/Setup *</label>
+                    <textarea id="jurnal-mark-desc" rows="3" placeholder="mis. Tandai OB dan FVG"></textarea>
+                    <input type="file" id="jurnal-mark-file" accept="image/png,image/jpeg,image/webp,image/gif" style="margin-top:6px" />
+                    <div class="hint">Upload mark image (opsional)</div>
+                  </div>
+                  <div class="repeatable-row">
+                    <label class="f">Performance (opsional)</label>
+                    <input type="file" id="jurnal-perf-file" accept="image/png,image/jpeg,image/webp,image/gif" />
+                    <div class="hint">Upload performance chart (opsional)</div>
+                    <label class="f" style="margin-top:8px;">Catatan Umum</label>
+                    <textarea id="jurnal-general-notes" rows="3" placeholder="Catatan umum (opsional)"></textarea>
+                  </div>
                 </div>
               </div>
-              <div class="row" style="gap:8px; margin-top:12px">
-                <button class="btn sm" id="o-save">Simpan Outlook</button>
-                <span id="o-save-msg" class="hint"></span>
+
+              <div class="wizard-step" data-step="3" style="margin-top:16px; padding-top:16px; border-top:1px solid var(--line);">
+                <div class="fh">Langkah 3: CTA</div>
+                <div id="jurnal-cta-block"></div>
+              </div>
+
+              <div class="row" style="margin-top:16px">
+                <button class="btn sm" id="jurnal-prev-step" type="button" style="display:none">\u2190 Kembali</button>
+                <button class="btn primary" id="jurnal-next-step" type="button">Lanjut ke CTA \u2192</button>
+                <button class="btn primary" id="jurnal-submit" type="button" style="display:none">Mulai Buat Hook (3 Pilihan) \u2192</button>
+                <label class="row" style="gap:6px;color:var(--muted);font-size:12.5px">
+                  <input type="checkbox" id="jurnal-fresh" /> Abaikan cache
+                </label>
+                <div class="spacer"></div>
+                <span id="jurnal-produce-msg" style="font-size:12.5px;color:var(--muted)"></span>
               </div>
             </div>
 
-            <div class="row" style="margin-top:16px">
-              <button class="btn primary" id="btn-produce">Mulai Produksi</button>
-              <label class="row" style="gap:6px;color:var(--muted);font-size:12.5px">
-                <input type="checkbox" id="f-fresh" /> Abaikan cache
-              </label>
-              <div class="spacer"></div>
-              <span id="produce-msg" style="font-size:12.5px;color:var(--muted)"></span>
+            <!-- Wizard: Market Outlook -->
+            <div id="wizard-outlook" class="wizard-shell" style="display:none">
+              <div class="wizard-step" data-step="1">
+                <div class="fh">Langkah 1: Judul & Galeri</div>
+
+                <div class="grid g3" style="margin-top:12px">
+                  <div><label class="f">Judul Outlook *</label><input id="outlook-title" placeholder="mis. Skenario EUR/USD pekan depan" /></div>
+                  <div><label class="f">Timeframe</label><select id="outlook-timeframe"><option value="">\u2014</option><option>H1</option><option>H4</option><option>D1</option><option>W1</option><option>MN</option></select></div>
+                  <div><label class="f">Catatan Umum (opsional)</label><input id="outlook-notes" placeholder="catatan skenario / disclaimer tambahan" /></div>
+                </div>
+
+                <div style="margin-top:12px">
+                  <label class="f">Galeri Chart \u2265 1 wajib</label>
+                  <div class="hint">Tiap gambar + deskripsi = 1 slide chart_snapshot. Urutan menentukan alur skenario.</div>
+                  <div id="outlook-gallery" class="repeatable-container" style="margin-top:10px; display:flex; flex-direction:column; gap:8px"></div>
+                  <div class="row" style="margin-top:8px; gap:8px;">
+                    <button class="btn sm" id="outlook-add-gallery" type="button">+ Tambah Gambar + Deskripsi</button>
+                    <span id="outlook-gallery-hint" class="hint">Minimal 1 item. Drag handle (\u2191\u2193) untuk reorder.</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="wizard-step" data-step="2" style="margin-top:16px; padding-top:16px; border-top:1px solid var(--line);">
+                <div class="fh">Langkah 2: CTA</div>
+                <div id="outlook-cta-block"></div>
+              </div>
+
+              <div class="row" style="margin-top:16px">
+                <button class="btn primary" id="outlook-submit" type="button">Mulai Buat Hook (3 Pilihan) \u2192</button>
+                <label class="row" style="gap:6px;color:var(--muted);font-size:12.5px">
+                  <input type="checkbox" id="outlook-fresh" /> Abaikan cache
+                </label>
+                <div class="spacer"></div>
+                <span id="outlook-produce-msg" style="font-size:12.5px;color:var(--muted)"></span>
+              </div>
             </div>
 
             <!-- Loading modal overlay -->
+            <div id="manuscript-preview" style="display:none"></div>
             <div class="produce-loading" id="produce-loading" style="display:none">
               <div class="loading-backdrop"></div>
               <div class="loading-modal">
                 <div class="loading-spinner"></div>
                 <h3 id="loading-title">Memulai produksi...</h3>
-                <p id="loading-sub">Pipeline 9 agen sedang berjalan. Ini memakan 2–5 menit.</p>
+                <p id="loading-sub">Pipeline 9 agen sedang berjalan. Ini memakan 2\u20135 menit.</p>
                 <div class="loading-progress">
                   <div class="loading-bar" id="loading-bar"></div>
                 </div>
@@ -510,19 +575,19 @@ export function renderStudioHtml(config: StudioConfig): string {
 </div>
 
 <div class="backdrop" id="backdrop"></div>
-<div class="drawer" id="drawer"><button class="x" id="drawer-x">×</button><div class="drawer-i" id="drawer-i"></div></div>
+<div class="drawer" id="drawer"><button class="x" id="drawer-x">\u00D7</button><div class="drawer-i" id="drawer-i"></div></div>
 <div class="slide-zoom" id="slide-zoom">
   <div class="zoom-stage" id="zoom-stage">
     <div class="zoom-wrapper" id="zoom-wrapper">
       <iframe class="zoom-frame" id="zoom-frame" title="Slide zoom"></iframe>
     </div>
     <div class="zoom-info" id="zoom-info"></div>
-    <button class="zoom-close" id="zoom-close" title="Tutup (Esc)">×</button>
+    <button class="zoom-close" id="zoom-close" title="Tutup (Esc)">\u00D7</button>
     <div class="zoom-controls" id="zoom-controls">
-      <button id="zoom-out" title="Perkecil">−</button>
-      <button id="zoom-reset" title="Reset">◎</button>
-      <button id="zoom-in" title="Perbesar">＋</button>
-      <button id="zoom-download" title="Unduh">⤓</button>
+      <button id="zoom-out" title="Perkecil">\u2212</button>
+      <button id="zoom-reset" title="Reset">\u25CE</button>
+      <button id="zoom-in" title="Perbesar">\uFF0B</button>
+      <button id="zoom-download" title="Unduh">\u2913</button>
     </div>
     <div class="zoom-thumbs" id="zoom-thumbs"></div>
   </div>
@@ -530,7 +595,7 @@ export function renderStudioHtml(config: StudioConfig): string {
 <div class="loading" id="loading">
   <div class="box">
     <div class="spin"></div>
-    <div class="msg" id="load-msg">Memuat…</div>
+    <div class="msg" id="load-msg">Memuat\u2026</div>
     <div class="sub" id="load-sub"></div>
   </div>
 </div>

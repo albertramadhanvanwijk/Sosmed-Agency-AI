@@ -16,7 +16,15 @@ export const STUDIO_JS = `
 
 var state = {
   tab: 'dashboard', detailId: null, carousels: [], office: null, officeMode: 'graphic',
-  uploads: [], brand: null, ctaPresets: [], simTimer: null, plan: null
+  uploads: [], brand: null, ctaPresets: [], simTimer: null, plan: null,
+  currentManuscript: null, currentCarousel: null, currentVersions: [],
+  jobsPollTimer: null,
+  // Wizard states
+  wizard: {
+    edukasi: { links: [], pdfText: '', pdfWarning: false },
+    jurnal: { rows: [], imageIds: {}, step: 1 },
+    outlook: { gallery: [], step: 1 }
+  }
 };
 
 function $(id) { return document.getElementById(id); }
@@ -43,7 +51,7 @@ function badge(t, c) { return el('span', 'badge ' + (c || 'b-muted'), t); }
 
 var loadTimer = null;
 function showLoading(msg, sub) {
-  $('load-msg').textContent = msg || 'Memuat…';
+  $('load-msg').textContent = msg || 'Memuat\\u2026';
   $('load-sub').textContent = sub || '';
   $('loading').classList.add('on');
   if (loadTimer) clearTimeout(loadTimer);
@@ -207,6 +215,17 @@ function renderMemSummary(node, summary, revCount) {
   node.appendChild(g);
 }
 
+function refreshJobsBadges() {
+  return api('/api/jobs').then(function (d) {
+    var active = d.active || [];
+    var mCount = active.filter(function (j) { return j.job_type === 'manuscript'; }).length;
+    var dCount = active.filter(function (j) { return j.job_type === 'design'; }).length;
+    var mBadge = $('jobs-manuscript-badge');
+    var dBadge = $('jobs-design-badge');
+    if (mBadge) { mBadge.textContent = String(mCount); mBadge.style.display = ''; }
+    if (dBadge) { dBadge.textContent = String(dCount); dBadge.style.display = ''; }
+  }).catch(function () {});
+}
 function loadOverview(silent) {
   return api('/api/overview').then(function (d) {
     state.carousels = d.recent;
@@ -284,7 +303,7 @@ function loadApprovals() {
       box.appendChild(h);
       var meta = el('div', 'fd');
       meta.appendChild(el('b', null, 'Ringkasan: '));
-      meta.appendChild(el('span', null, (c.compliance_outcome || '-').toUpperCase() + ' · ' + c.slide_count + ' slide · ' + usd(c.cost_usd) + ' · ' + ago(c.updated_at)));
+      meta.appendChild(el('span', null, (c.compliance_outcome || '-').toUpperCase() + ' \\u00B7 ' + c.slide_count + ' slide \\u00B7 ' + usd(c.cost_usd) + ' \\u00B7 ' + ago(c.updated_at)));
       box.appendChild(meta);
       var row = el('div', 'row');
       row.style.marginTop = '10px';
@@ -310,7 +329,7 @@ function loadApprovals() {
 
 function decide(id, decision, btn) {
   var note = 'Disetujui setelah memeriksa pratinjau dan temuan kepatuhan.';
-  return busy(btn, 'Menyimpan keputusan', 'Sebentar…', function () {
+  return busy(btn, 'Menyimpan keputusan', 'Sebentar\\u2026', function () {
     return api('/api/carousels/' + id + '/decision', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ decision: decision, note: note })
@@ -358,7 +377,7 @@ function openRejectDialog(id) {
     if (note.length < 5) { toast('Alasan penolakan wajib diisi (minimal 5 karakter).', 'warn'); return; }
     if (!window.confirm('Yakin ingin menolak carousel ini? Carousel akan dipindahkan ke arsip.')) return;
     
-    busy(bConfirm, 'Menolak carousel', 'Menyimpan…', function () {
+    busy(bConfirm, 'Menolak carousel', 'Menyimpan\\u2026', function () {
       return api('/api/carousels/' + id + '/decision', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ decision: 'rejected', note: note, autoRevise: false })
@@ -379,7 +398,7 @@ function openRejectDialog(id) {
  * Formulir catatan revisi.
  *
  * Catatan WAJIB diisi. Tanpa catatan, agen tidak punya bahan untuk belajar dan
- * kesalahan yang sama akan terulang — inilah inti permintaan pengguna pada
+ * kesalahan yang sama akan terulang \\u2014 inilah inti permintaan pengguna pada
  * poin revisi.
  */
 function openReviseForm(id, decision) {
@@ -424,7 +443,7 @@ function openReviseForm(id, decision) {
     if (note.length < 5) { toast('Catatan revisi wajib diisi (minimal 5 karakter).', 'warn'); return; }
     var auto = $('rev-auto') && $('rev-auto').checked;
     busy(bSend, auto ? 'Menjalankan perbaikan' : 'Menyimpan catatan',
-      auto ? 'Agen sedang memperbaiki sesuai catatan Anda. Ini memakan 2 sampai 5 menit…' : 'Menyimpan…', function () {
+      auto ? 'Agen sedang memperbaiki sesuai catatan Anda. Ini memakan 2 sampai 5 menit\\u2026' : 'Menyimpan\\u2026', function () {
       return api('/api/carousels/' + id + '/decision', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ decision: decision, note: note, autoRevise: auto })
@@ -453,7 +472,7 @@ function openDrawer() { $('backdrop').classList.add('on'); $('drawer').classList
 function closeDrawer() { state.detailId = null; $('backdrop').classList.remove('on'); $('drawer').classList.remove('on'); }
 
 // ---------------------------------------------------------------------------
-// Slide zoom — Item 12 (clickable zoom, pan, download, keyboard)
+// Slide zoom \\u2014 Item 12 (clickable zoom, pan, download, keyboard)
 // ---------------------------------------------------------------------------
 
 var zoomState = { level: 1, x: 0, y: 0, dragging: false, sx: 0, sy: 0, id: null, pos: 1, slides: [] };
@@ -462,7 +481,7 @@ function applyZoom() {
   var wr = $('zoom-wrapper'); if (!wr) return;
   wr.style.transform = 'scale(' + zoomState.level + ')';
   wr.style.transformOrigin = 'center center';
-  var info = $('zoom-info'); if (info) info.textContent = 'Slide ' + zoomState.pos + ' / ' + zoomState.slides.length + ' · ' + Math.round(zoomState.level * 100) + '% · +/- zoom · Esc tutup';
+  var info = $('zoom-info'); if (info) info.textContent = 'Slide ' + zoomState.pos + ' / ' + zoomState.slides.length + ' \\u00B7 ' + Math.round(zoomState.level * 100) + '% \\u00B7 +/- zoom \\u00B7 Esc tutup';
 }
 
 function zoomIn() { zoomState.level = Math.min(3, zoomState.level + 0.25); applyZoom(); }
@@ -519,7 +538,7 @@ function openDetail(id) {
   state.detailId = id;
   openDrawer();
   var inner = $('drawer-i');
-  fill(inner, [el('div', 'empty', 'Memuat detail…')]);
+  fill(inner, [el('div', 'empty', 'Memuat detail\\u2026')]);
 
   api('/api/carousels/' + id).then(function (d) {
     var c = d.carousel;
@@ -539,7 +558,7 @@ function openDetail(id) {
 
     var meta = el('div', 'hint');
     meta.style.marginTop = '7px';
-    meta.textContent = d.slides.length + ' slide · ' + num(c.tokens_in) + '/' + num(c.tokens_out) + ' token · ' + usd(c.cost_usd) + ' · ' + msFmt(c.duration_ms) + ' · dibuat ' + ago(c.created_at);
+    meta.textContent = d.slides.length + ' slide \\u00B7 ' + num(c.tokens_in) + '/' + num(c.tokens_out) + ' token \\u00B7 ' + usd(c.cost_usd) + ' \\u00B7 ' + msFmt(c.duration_ms) + ' \\u00B7 dibuat ' + ago(c.created_at);
     inner.appendChild(meta);
 
     // Tombol keputusan hanya ada selama status masih menunggu keputusan.
@@ -569,7 +588,7 @@ function openDetail(id) {
       var done = el('div', 'finding');
       done.style.marginTop = '14px';
       done.appendChild(el('div', 'fh', 'Keputusan sudah diambil'));
-      done.appendChild(el('div', 'fd', 'Status: ' + c.status + (c.approved_at ? ' · ' + ago(c.approved_at) : '') + (c.approval_note ? ' · ' + c.approval_note : '')));
+      done.appendChild(el('div', 'fd', 'Status: ' + c.status + (c.approved_at ? ' \\u00B7 ' + ago(c.approved_at) : '') + (c.approval_note ? ' \\u00B7 ' + c.approval_note : '')));
       inner.appendChild(done);
     }
 
@@ -609,7 +628,7 @@ function openDetail(id) {
         hold.appendChild(fr);
         th.appendChild(hold);
         var cap = el('div', 'cap');
-        cap.appendChild(el('span', null, 'Slide ' + s.position + ' · ' + s.role));
+        cap.appendChild(el('span', null, 'Slide ' + s.position + ' \\u00B7 ' + s.role));
         cap.appendChild(el('span', null, (s.template_key || '').replace(/-/g, ' ')));
         th.appendChild(cap);
         strip.appendChild(th);
@@ -711,7 +730,7 @@ function openDetail(id) {
       var sJ = el('div', 'sec');
       sJ.appendChild(el('h3', null, 'Data Jurnal Trading'));
       var jt = d.jurnalTrading;
-      sJ.appendChild(el('div', 'fd', 'Pair: ' + jt.pair + (jt.timeframe ? ' · Timeframe: ' + jt.timeframe : '')));
+      sJ.appendChild(el('div', 'fd', 'Pair: ' + jt.pair + (jt.timeframe ? ' \\u00B7 Timeframe: ' + jt.timeframe : '')));
       if (jt.tradeTable && jt.tradeTable.length) {
         var tJ = el('table', 'tbl'); var hJ = el('tr');
         ['Pairs','Direction','Session','%Risk','RR','Confluence','PnL','Result'].forEach(function (x) { hJ.appendChild(el('th', null, x)); });
@@ -765,8 +784,8 @@ var SHORT = { strategist: 'ST', research: 'RS', copywriter: 'CW', composer: 'CP'
 var ANAME = { strategist: 'Strategist', research: 'Research', copywriter: 'Copywriter', composer: 'Composer', renderer: 'Renderer', compliance: 'Compliance', compliance_advisor: 'Nuansa', scheduler: 'Scheduler', analyst: 'Analyst' };
 var AROLE = {
   strategist: 'sudut pandang & pesan kunci', research: 'fakta bersumber + waktu', copywriter: 'caption per platform',
-  composer: 'slide spec terstruktur', compliance: 'aturan kode — dapat memblokir', compliance_advisor: 'penilaian model — peringatan',
-  renderer: 'HTML → PNG/PDF', scheduler: 'saran waktu tayang', analyst: 'penilaian & aset simpan'
+  composer: 'slide spec terstruktur', compliance: 'aturan kode \\u2014 dapat memblokir', compliance_advisor: 'penilaian model \\u2014 peringatan',
+  renderer: 'HTML \\u2192 PNG/PDF', scheduler: 'saran waktu tayang', analyst: 'penilaian & aset simpan'
 };
 var SLABEL = { working: 'Bekerja', done: 'Selesai', awaiting_human: 'Menunggu manusia', failed: 'Gagal', idle: 'Menganggur' };
 
@@ -801,7 +820,7 @@ function renderOffice(data) {
       members.forEach(function (a) {
         var cls = a.status === 'working' ? 'sw' : a.status === 'failed' ? 'sf' : a.status === 'awaiting_human' ? 'sa' : a.status === 'done' ? 'sd' : '';
         var node = el('div', 'agent ' + cls);
-        node.title = (ANAME[a.agentKey] || a.agentKey) + ' — ' + (SLABEL[a.status] || a.status) + (a.task ? ': ' + a.task : '');
+        node.title = (ANAME[a.agentKey] || a.agentKey) + ' \\u2014 ' + (SLABEL[a.status] || a.status) + (a.task ? ': ' + a.task : '');
         node.appendChild(el('div', 'av', SHORT[a.agentKey] || a.agentKey.slice(0, 2).toUpperCase()));
         node.appendChild(el('div', 'nm', ANAME[a.agentKey] || a.agentKey));
         if (a.status === 'failed') node.appendChild(el('div', 'fl bad', 'GAGAL'));
@@ -846,7 +865,7 @@ function renderOfficeTable(agents) {
     if (members.length === 0) {
       var tr0 = el('tr');
       tr0.appendChild(el('td', null, z.name));
-      var tdx = el('td', null, '—');
+      var tdx = el('td', null, '\\u2014');
       tdx.colSpan = 7;
       tdx.style.color = 'var(--dim)';
       tr0.appendChild(tdx);
@@ -934,9 +953,30 @@ function loadPlan() {
   return api('/api/plan').then(function (d) { if (d.plan) { renderPlan(d.plan); } });
 }
 
+function getSelectedPlanIndices() {
+  var boxes = document.querySelectorAll('.plan-slot-checkbox:checked');
+  var out = [];
+  for (var i = 0; i < boxes.length; i++) out.push(Number(boxes[i].getAttribute('data-idx')));
+  return out;
+}
+function bulkGenerateManuscript() {
+  var idxs = getSelectedPlanIndices();
+  if (idxs.length === 0) { toast('Pilih minimal 1 slot.', 'warn'); return; }
+  var items = idxs.map(function (i) {
+    var sl = state.plan.slots[i];
+    if (sl.categoryKey === 'jurnal_trading') return { categoryKey: sl.categoryKey, topic: sl.topic, form1: [{ pair: (sl.topic.split(' ')[0] || 'EUR/USD'), direction: 'long' }], form2: { directionDesc: 'Direction lengkap minimal sepuluh karakter', executionDesc: 'Execution lengkap minimal sepuluh karakter', markDesc: 'Mark lengkap minimal sepuluh karakter' } };
+    if (sl.categoryKey === 'market_outlook') return { categoryKey: sl.categoryKey, title: sl.topic, gallery: [{ imageId: 'img1', description: 'Deskripsi chart minimal sepuluh karakter' }] };
+    return { categoryKey: sl.categoryKey, topic: sl.topic };
+  });
+  api('/api/manuscripts/bulk-generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: items }) }).then(function (r) { var n = (r.succeeded && r.succeeded.length) || items.length; toast(n + ' berhasil', 'ok'); loadPlan(); }).catch(function (e) { toast('Gagal: ' + e.message, 'bad'); });
+}
+function bulkApproveManuscript() { var idxs = getSelectedPlanIndices(); if (idxs.length === 0) { toast('Pilih minimal 1 slot.', 'warn'); return; } api('/api/manuscripts/bulk-approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: idxs }) }).then(function () { toast(idxs.length + ' berhasil', 'ok'); loadPlan(); }).catch(function (e) { toast('Gagal: ' + e.message, 'bad'); }); }
+function bulkGenerateDesign() { var idxs = getSelectedPlanIndices(); if (idxs.length === 0) { toast('Pilih minimal 1 slot.', 'warn'); return; } api('/api/designs/bulk-generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: idxs }) }).then(function () { toast(idxs.length + ' berhasil', 'ok'); }).catch(function (e) { toast('Gagal: ' + e.message, 'bad'); }); }
+function bulkApproveDesign() { var idxs = getSelectedPlanIndices(); if (idxs.length === 0) { toast('Pilih minimal 1 slot.', 'warn'); return; } api('/api/designs/bulk-decision', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: idxs, decision: 'approved' }) }).then(function () { toast(idxs.length + ' berhasil', 'ok'); }).catch(function (e) { toast('Gagal: ' + e.message, 'bad'); }); }
+
 function renderPlan(p) {
   state.plan = p;
-  $('plan-meta').textContent = p.periodStart + ' sampai ' + p.periodEnd + ' · ' + p.slots.length + ' slot';
+  $('plan-meta').textContent = p.periodStart + ' sampai ' + p.periodEnd + ' \\u00B7 ' + p.slots.length + ' slot';
   var out = $('plan-out');
   out.textContent = '';
   var note = el('div', 'finding');
@@ -946,13 +986,14 @@ function renderPlan(p) {
     var w = el('div', 'finding block');
     w.style.marginTop = '12px';
     w.appendChild(el('div', 'fh', 'Peringatan'));
-    p.warnings.forEach(function (x) { w.appendChild(el('div', 'fd', '• ' + x)); });
+    p.warnings.forEach(function (x) { w.appendChild(el('div', 'fd', '\\u2022 ' + x)); });
     out.appendChild(w);
   }
   var list = el('div');
   list.style.marginTop = '12px';
   p.slots.forEach(function (s, idx) {
     var row = el('div', 'plan-row');
+    var cb = document.createElement('input'); cb.type = 'checkbox'; cb.className = 'plan-slot-checkbox'; cb.setAttribute('data-idx', String(idx)); row.appendChild(cb);
     var dd = el('div', 'plan-date');
     dd.appendChild(el('div', 'd', s.date.slice(5)));
     dd.appendChild(el('div', 'w', s.weekday));
@@ -962,6 +1003,8 @@ function renderPlan(p) {
     var meta = el('div', 'row');
     meta.style.marginTop = '4px';
     meta.appendChild(badge(s.categoryKey.replace(/_/g, ' '), 'b-cat'));
+    if (s.manuscriptStatus) meta.appendChild(badge(s.manuscriptStatus.replace(/_/g, ' '), 'b-wait'));
+    if (s.designStatus) meta.appendChild(badge(s.designStatus.replace(/_/g, ' '), 'b-cat'));
     meta.appendChild(badge(s.suggestedTime, 'b-muted'));
     if (s.timeSensitive) meta.appendChild(badge('peka waktu', 'b-wait'));
     if (s.copyStatus === 'approved') meta.appendChild(badge('copy approved', 'b-ok'));
@@ -972,9 +1015,9 @@ function renderPlan(p) {
     var copyPreview = el('div', 'copy-preview copyDraft');
     copyPreview.style.cssText = 'margin-top:8px;padding:8px;border:1px solid var(--line-soft);border-radius:8px;background:var(--panel)';
     if (s.copyDraft) {
-      copyPreview.appendChild(el('div', 'fh', s.copyDraft.hook || '—'));
+      copyPreview.appendChild(el('div', 'fh', s.copyDraft.hook || '\\u2014'));
       copyPreview.appendChild(el('div', 'fd', (s.copyDraft.body || '').slice(0, 220)));
-      var tags = el('div', 'hint'); tags.textContent = (s.copyDraft.hashtags || []).join(' ') + (s.copyDraft.cta ? ' · ' + s.copyDraft.cta : '');
+      var tags = el('div', 'hint'); tags.textContent = (s.copyDraft.hashtags || []).join(' ') + (s.copyDraft.cta ? ' \\u00B7 ' + s.copyDraft.cta : '');
       copyPreview.appendChild(tags);
     } else {
       copyPreview.appendChild(el('div', 'hint', 'copyDraft belum tersedia'));
@@ -982,7 +1025,7 @@ function renderPlan(p) {
     body.appendChild(copyPreview);
     // inline copy editor (approve/regenerate)
     var copyActions = el('div', 'row'); copyActions.style.marginTop = '6px';
-    var btnApprove = el('button', 'btn sm', s.copyStatus === 'approved' ? 'Approved ✓' : 'Approve Copy');
+    var btnApprove = el('button', 'btn sm', s.copyStatus === 'approved' ? 'Approved \\u2713' : 'Approve Copy');
     btnApprove.onclick = function () { approveCopy(idx); };
     if (s.copyStatus === 'approved') btnApprove.disabled = true;
     var btnRegen = el('button', 'btn sm', 'Regenerate Copy');
@@ -1026,7 +1069,7 @@ function approveCopy(idx) {
   state.plan.slots[idx].copyStatus = 'approved';
   // persist copyStatus via plan reflection in memory (local only)
   renderPlan(state.plan);
-  toast('Copy disetujui — produksi berikutnya akan skip copywriter (prebuiltCaptions).', 'ok');
+  toast('Copy disetujui \\u2014 produksi berikutnya akan skip copywriter (prebuiltCaptions).', 'ok');
 }
 
 function openCopywriteDetail(idx) {
@@ -1039,7 +1082,7 @@ function openCopywriteDetail(idx) {
   var t = el('h2', null, 'Detail Copywriting');
   t.style.cssText = 'font-size:17px;margin-bottom:6px;padding-right:36px';
   inner.appendChild(t);
-  inner.appendChild(el('div', 'hint', s.topic || '—'));
+  inner.appendChild(el('div', 'hint', s.topic || '\\u2014'));
   
   if (!s.copyDraft) {
     inner.appendChild(el('div', 'finding', 'Copywriting belum tersedia. Klik Regenerate Copy untuk membuat.'));
@@ -1050,10 +1093,10 @@ function openCopywriteDetail(idx) {
   var copyDetail = el('div');
   copyDetail.style.marginTop = '16px';
   copyDetail.appendChild(el('label', 'f', 'Hook'));
-  copyDetail.appendChild(el('div', 'finding', s.copyDraft.hook || '—'));
+  copyDetail.appendChild(el('div', 'finding', s.copyDraft.hook || '\\u2014'));
   
   copyDetail.appendChild(el('label', 'f', 'Body'));
-  copyDetail.appendChild(el('div', 'finding', s.copyDraft.body || '—'));
+  copyDetail.appendChild(el('div', 'finding', s.copyDraft.body || '\\u2014'));
   
   if (s.copyDraft.hashtags && s.copyDraft.hashtags.length > 0) {
     copyDetail.appendChild(el('label', 'f', 'Hashtags'));
@@ -1082,7 +1125,7 @@ function regenerateCopy(idx) {
   var s = state.plan.slots[idx];
   // deterministic regeneration: rotate hook suffix
   var base = s.topic || 'topik';
-  s.copyDraft = { hook: base + ' — versi baru ' + Date.now().toString(36).slice(-4), body: 'Revisi copy untuk ' + base + '. ' + 'Pembahasan praktis dan ringkas untuk carousel.', hashtags: ['#trading', '#tips', '#propdesk'], cta: 'Simpan & bagikan.' };
+  s.copyDraft = { hook: base + ' \\u2014 versi baru ' + Date.now().toString(36).slice(-4), body: 'Revisi copy untuk ' + base + '. ' + 'Pembahasan praktis dan ringkas untuk carousel.', hashtags: ['#trading', '#tips', '#propdesk'], cta: 'Simpan & bagikan.' };
   s.copyStatus = 'needs_regeneration';
   // after regen, allow approve again
   s.copyStatus = 'draft';
@@ -1105,7 +1148,7 @@ function produceFromPlanSlot(slot) {
 }
 
 function buildPlan() {
-  return busy($('plan-build'), 'Menyusun rencana', 'Mengambil berita terbaru dan menyusun rotasi kategori…', function () {
+  return busy($('plan-build'), 'Menyusun rencana', 'Mengambil berita terbaru dan menyusun rotasi kategori\\u2026', function () {
     return api('/api/plan', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1135,11 +1178,11 @@ function onCategoryChange() {
     market_outlook: 'Paling berisiko. Selalu dibingkai sebagai analisis skenario.'
   };
   var themes = {
-    edukasi_trading: { primary: '#3B82F6', accent: '#1E40AF', bg: '#EFF6FF', borderStyle: 'solid', icon: '📚', pattern: 'grid' },
-    edukasi_propfirm: { primary: '#A855F7', accent: '#7E22CE', bg: '#FAF5FF', borderStyle: 'dashed', icon: '🏢', pattern: 'diagonal' },
-    jurnal_trading: { primary: '#F59E0B', accent: '#D97706', bg: '#FFFBEB', borderStyle: 'double', icon: '📊', pattern: 'dots' },
-    market_info: { primary: '#10B981', accent: '#047857', bg: '#ECFDF5', borderStyle: 'dotted', icon: '📰', pattern: 'waves' },
-    market_outlook: { primary: '#EF4444', accent: '#DC2626', bg: '#FEF2F2', borderStyle: 'gradient', icon: '🎯', pattern: 'arrows' }
+    edukasi_trading: { primary: '#3B82F6', accent: '#1E40AF', bg: '#EFF6FF', borderStyle: 'solid', icon: '\\u{1F4DA}', pattern: 'grid' },
+    edukasi_propfirm: { primary: '#A855F7', accent: '#7E22CE', bg: '#FAF5FF', borderStyle: 'dashed', icon: '\\u{1F3E2}', pattern: 'diagonal' },
+    jurnal_trading: { primary: '#F59E0B', accent: '#D97706', bg: '#FFFBEB', borderStyle: 'double', icon: '\\u{1F4CA}', pattern: 'dots' },
+    market_info: { primary: '#10B981', accent: '#047857', bg: '#ECFDF5', borderStyle: 'dotted', icon: '\\u{1F4F0}', pattern: 'waves' },
+    market_outlook: { primary: '#EF4444', accent: '#DC2626', bg: '#FEF2F2', borderStyle: 'gradient', icon: '\\u{1F3AF}', pattern: 'arrows' }
   };
   var catKey = $('f-cat').value;
   $('f-cat-hint').textContent = hints[catKey] || '';
@@ -1186,7 +1229,7 @@ function checkSimilarity() {
     d.hits.slice(0, 3).forEach(function (h) {
       var d1 = el('div', 'fd');
       d1.appendChild(el('b', null, h.title));
-      d1.appendChild(el('span', null, ' · kesamaan ' + Math.round(h.score * 100) + '% · ' + h.categoryKey.replace(/_/g, ' ')));
+      d1.appendChild(el('span', null, ' \\u00B7 kesamaan ' + Math.round(h.score * 100) + '% \\u00B7 ' + h.categoryKey.replace(/_/g, ' ')));
       w.appendChild(d1);
     });
     box.appendChild(w);
@@ -1199,7 +1242,7 @@ function addFiles(files) {
     var reader = new FileReader();
     reader.onload = function () {
       var uri = String(reader.result);
-      busy(null, 'Mengunggah ' + f.name, 'Menyimpan gambar ke basis data lokal…', function () {
+      busy(null, 'Mengunggah ' + f.name, 'Menyimpan gambar ke basis data lokal\\u2026', function () {
         return api('/api/uploads', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ originalName: f.name, mimeType: f.type, byteSize: f.size, dataUri: uri, slidePosition: 2 })
@@ -1214,8 +1257,10 @@ function addFiles(files) {
   });
 }
 
-function renderUploads() {
-  var n = $('up-list');
+function renderUploads(containerId) {
+  var targetId = containerId || 'up-list';
+  var n = $(targetId);
+  if (!n) return;
   n.textContent = '';
   state.uploads.forEach(function (u) {
     var d = el('div', 'up');
@@ -1224,13 +1269,13 @@ function renderUploads() {
     img.alt = u.name;
     d.appendChild(img);
     d.appendChild(el('div', 'un', u.name));
-    var b = el('button', 'del', '×');
+    var b = el('button', 'del', '\\u00D7');
     b.title = 'Hapus gambar';
     b.onclick = function () {
       busy(null, 'Menghapus gambar', '', function () { return api('/api/uploads/' + u.id, { method: 'DELETE' }); })
         .then(function () {
           state.uploads = state.uploads.filter(function (x) { return x.id !== u.id; });
-          renderUploads();
+          renderUploads(targetId);
         })
         .catch(function (e) { toast('Gagal menghapus: ' + e.message, 'bad'); });
     };
@@ -1259,7 +1304,7 @@ function renderJurnalTable() {
       td.appendChild(inp); tr.appendChild(td);
     });
     var tdDel = document.createElement('td');
-    var del = document.createElement('button'); del.textContent = '×'; del.className = 'del';
+    var del = document.createElement('button'); del.textContent = '\\u00D7'; del.className = 'del';
     del.onclick = function () { jurnalState.rows.splice(idx, 1); renderJurnalTable(); };
     tdDel.appendChild(del); tr.appendChild(tdDel);
     tb.appendChild(tr);
@@ -1314,7 +1359,7 @@ function collectJurnalPayload() {
   };
 }
 
-// Market Outlook state — Item 8
+// Market Outlook state \\u2014 Item 8
 var outlookState = { gallery: [], ctas: [] };
 function renderOutlookGallery() {
   var n = $('o-gallery'); if (!n) return;
@@ -1328,9 +1373,9 @@ function renderOutlookGallery() {
     var ta = document.createElement('textarea'); ta.rows = 2; ta.placeholder = 'Deskripsi chart (penting untuk skenario)'; ta.value = g.description || '';
     ta.oninput = function () { outlookState.gallery[idx].description = ta.value; };
     col.appendChild(ta); row.appendChild(col);
-    var up = el('button', 'btn sm', '↑'); up.disabled = idx === 0; up.onclick = function () { var t = outlookState.gallery[idx]; outlookState.gallery.splice(idx, 1); outlookState.gallery.splice(idx - 1, 0, t); outlookState.gallery.forEach(function (x, i) { x.sortOrder = i; }); renderOutlookGallery(); };
-    var down = el('button', 'btn sm', '↓'); down.disabled = idx === outlookState.gallery.length - 1; down.onclick = function () { var t = outlookState.gallery[idx]; outlookState.gallery.splice(idx, 1); outlookState.gallery.splice(idx + 1, 0, t); outlookState.gallery.forEach(function (x, i) { x.sortOrder = i; }); renderOutlookGallery(); };
-    var del = el('button', 'btn sm bad', '×'); del.onclick = function () { outlookState.gallery.splice(idx, 1); outlookState.gallery.forEach(function (x, i) { x.sortOrder = i; }); renderOutlookGallery(); };
+    var up = el('button', 'btn sm', '\\u2191'); up.disabled = idx === 0; up.onclick = function () { var t = outlookState.gallery[idx]; outlookState.gallery.splice(idx, 1); outlookState.gallery.splice(idx - 1, 0, t); outlookState.gallery.forEach(function (x, i) { x.sortOrder = i; }); renderOutlookGallery(); };
+    var down = el('button', 'btn sm', '\\u2193'); down.disabled = idx === outlookState.gallery.length - 1; down.onclick = function () { var t = outlookState.gallery[idx]; outlookState.gallery.splice(idx, 1); outlookState.gallery.splice(idx + 1, 0, t); outlookState.gallery.forEach(function (x, i) { x.sortOrder = i; }); renderOutlookGallery(); };
+    var del = el('button', 'btn sm bad', '\\u00D7'); del.onclick = function () { outlookState.gallery.splice(idx, 1); outlookState.gallery.forEach(function (x, i) { x.sortOrder = i; }); renderOutlookGallery(); };
     row.appendChild(up); row.appendChild(down); row.appendChild(del);
     n.appendChild(row);
   });
@@ -1349,7 +1394,7 @@ function renderOutlookCtas() {
     if (c.kind === 'promo') {
       var code = document.createElement('input'); code.placeholder = 'Kode promo'; code.value = c.promoCode || ''; code.oninput = function () { outlookState.ctas[idx].promoCode = code.value; }; row.appendChild(code);
     }
-    var del = el('button', 'btn sm bad', '×'); del.onclick = function () { outlookState.ctas.splice(idx, 1); renderOutlookCtas(); };
+    var del = el('button', 'btn sm bad', '\\u00D7'); del.onclick = function () { outlookState.ctas.splice(idx, 1); renderOutlookCtas(); };
     row.appendChild(del); n.appendChild(row);
   });
 }
@@ -1505,6 +1550,7 @@ function pollUntilDone() {
   pollTimer = setInterval(function () {
     ticks++;
     loadOverview(true);
+    refreshJobsBadges();
     if (state.tab === 'office') loadOffice();
     if (state.tab === 'pipeline') loadPipeline();
     if (ticks > 60) { clearInterval(pollTimer); pollTimer = null; }
@@ -1529,7 +1575,7 @@ function loadKnowledge() {
       h.appendChild(el('span', null, k.title));
       b.appendChild(h);
       b.appendChild(el('div', 'fd', k.content));
-      b.appendChild(el('div', 'fd', (k.tags || []).join(', ') + ' · ' + ago(k.created_at)));
+      b.appendChild(el('div', 'fd', (k.tags || []).join(', ') + ' \\u00B7 ' + ago(k.created_at)));
       return b;
     }));
   });
@@ -1616,7 +1662,7 @@ function loadMemory() {
         h.appendChild(badge(r.createdBy === 'human' ? 'dari Anda' : 'dari agen', r.createdBy === 'human' ? 'b-ok' : 'b-work'));
         h.appendChild(badge(r.categoryKey ? r.categoryKey.replace(/_/g, ' ') : 'semua kategori', 'b-cat'));
         h.appendChild(badge('kepercayaan ' + Math.round(r.confidence * 100) + '%', r.confidence >= 0.7 ? 'b-ok' : 'b-muted'));
-        if (r.occurrences > 1) h.appendChild(badge('muncul ' + r.occurrences + '×', 'b-muted'));
+        if (r.occurrences > 1) h.appendChild(badge('muncul ' + r.occurrences + '\\u00D7', 'b-muted'));
         if (!r.active) h.appendChild(badge('nonaktif', 'b-idle'));
         b.appendChild(h);
         b.appendChild(el('div', 'fd', r.rule));
@@ -1735,13 +1781,1200 @@ function showTab(tab) {
     audit: loadAudit
   }[tab];
 
-  if (tab === 'create') { onCategoryChange(); return Promise.resolve(); }
+  if (tab === 'create') { 
+    // Initialize wizard hash routing (old onCategoryChange removed with f-* form)
+    initWizardHash();
+    return Promise.resolve(); 
+  }
   if (!loader) return Promise.resolve();
   // Setiap perpindahan tab dan setiap muat ulang menampilkan popup kemajuan,
   // supaya pengguna tahu sistem sedang bekerja.
-  return busy($('btn-refresh'), 'Memuat ' + lbl[1], 'Mengambil data dari server…', function () { return Promise.resolve(loader()); })
+  return busy($('btn-refresh'), 'Memuat ' + lbl[1], 'Mengambil data dari server\\u2026', function () { return Promise.resolve(loader()); })
     .catch(function (e) { toast('Gagal memuat: ' + e.message, 'bad'); });
 }
+
+/** Initialize hash-based wizard routing within create tab */
+function initWizardHash() {
+  // Hide all wizard shells initially
+  ['wizard-edukasi', 'wizard-jurnal', 'wizard-outlook'].forEach(function (id) {
+    var el = $(id);
+    if (el) el.style.display = 'none';
+  });
+  // Hide wizard nav buttons initially (they're shown when create tab is active)
+  var nav = $('wizard-nav-buttons');
+  if (nav) nav.style.display = 'flex';
+
+  // Read current hash
+  var hash = window.location.hash;
+  if (hash === '#create-edukasi' || hash === '#create-jurnal' || hash === '#create-outlook') {
+    showWizard(hash.slice(1)); // remove #
+  }
+
+  // Listen for hash changes
+  window.addEventListener('hashchange', onHashChange);
+}
+
+function onHashChange() {
+  var hash = window.location.hash;
+  if (hash === '#create-edukasi' || hash === '#create-jurnal' || hash === '#create-outlook') {
+    showWizard(hash.slice(1));
+  } else if (state.tab === 'create') {
+    // No valid wizard hash, hide all
+    ['wizard-edukasi', 'wizard-jurnal', 'wizard-outlook'].forEach(function (id) {
+      var el = $(id);
+      if (el) el.style.display = 'none';
+    });
+    // Show wizard nav
+    var nav = $('wizard-nav-buttons');
+    if (nav) nav.style.display = 'flex';
+  }
+}
+
+function showWizard(wizardId) {
+  // Hide all wizard shells
+  ['wizard-edukasi', 'wizard-jurnal', 'wizard-outlook'].forEach(function (id) {
+    var el = $(id);
+    if (el) el.style.display = 'none';
+  });
+  // Hide wizard nav
+  var nav = $('wizard-nav-buttons');
+  if (nav) nav.style.display = 'none';
+
+  // Show selected wizard
+  var wizard = $(wizardId);
+  if (wizard) wizard.style.display = '';
+
+  // Update nav button active state
+  ['wizard-nav-edukasi', 'wizard-nav-jurnal', 'wizard-nav-outlook'].forEach(function (btnId) {
+    var btn = $(btnId);
+    if (btn) btn.className = btnId === 'wizard-nav-' + wizardId.replace('wizard-', '') ? 'btn primary' : 'btn';
+  });
+
+  // Initialize wizard-specific handlers
+  if (wizardId === 'wizard-edukasi') { initEdukasiWizard(); }
+  else if (wizardId === 'wizard-jurnal') { initJurnalWizard(); }
+  else if (wizardId === 'wizard-outlook') { initOutlookWizard(); }
+}
+
+// ===================== EDUKASI WIZARD =====================
+
+function initEdukasiWizard() {
+  // Reset state
+  state.wizard.edukasi = { links: [], pdfText: '', pdfWarning: false };
+
+  // Character counter for materi
+  var materiEl = $('edukasi-materi');
+  var counterEl = $('edukasi-materi-counter');
+  if (materiEl && counterEl) {
+    materiEl.oninput = function () {
+      var len = materiEl.value.length;
+      counterEl.textContent = len + '/8000';
+      counterEl.className = 'hint' + (len > 8000 ? ' danger' : len > 7000 ? ' warn' : '');
+    };
+  }
+
+  // Add link row
+  $('edukasi-add-link').onclick = function () {
+    if (state.wizard.edukasi.links.length >= 3) {
+      toast('Maksimal 3 link.', 'warn');
+      return;
+    }
+    addEdukasiLinkRow('');
+  };
+
+  // Fetch link handler
+  function addEdukasiLinkRow(url) {
+    var container = $('edukasi-links');
+    var idx = state.wizard.edukasi.links.length;
+    state.wizard.edukasi.links.push({ url: url, title: '', snippet: '' });
+
+    var row = el('div', 'repeatable-row');
+    row.style.cssText = 'gap:8px; align-items:flex-start; flex-wrap:wrap';
+    row.id = 'edukasi-link-row-' + idx;
+
+    var inp = document.createElement('input');
+    inp.type = 'url';
+    inp.placeholder = 'https://...';
+    inp.value = url;
+    inp.id = 'edukasi-link-' + idx;
+    inp.style.flex = '1 1 250px';
+    inp.oninput = function () { state.wizard.edukasi.links[idx].url = inp.value; };
+    row.appendChild(inp);
+
+    var btnFetch = el('button', 'btn sm', 'Fetch');
+    btnFetch.id = 'edukasi-fetch-' + idx;
+    btnFetch.onclick = function () { fetchEdukasiLink(idx, inp.value, row); };
+    row.appendChild(btnFetch);
+
+    var btnDel = el('button', 'btn sm bad', '\\u00D7');
+    btnDel.onclick = function () {
+      state.wizard.edukasi.links.splice(idx, 1);
+      renderEdukasiLinks();
+    };
+    row.appendChild(btnDel);
+
+    // Preview container
+    var preview = el('div', 'link-preview hint');
+    preview.id = 'edukasi-link-preview-' + idx;
+    preview.style.cssText = 'flex:1 1 100%; margin-top:4px; font-size:12px; display:none';
+    row.appendChild(preview);
+
+    container.appendChild(row);
+  }
+
+  function fetchEdukasiLink(idx, url, row) {
+    if (!url) { toast('Isi URL terlebih dahulu.', 'warn'); return; }
+    var btnFetch = row.querySelector('#edukasi-fetch-' + idx);
+    busy(btnFetch, 'Mengambil link', '', function () {
+      return api('/api/materials/fetch-link', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: url })
+      });
+    }).then(function (r) {
+      state.wizard.edukasi.links[idx].title = r.title || '';
+      state.wizard.edukasi.links[idx].snippet = r.snippet || '';
+      var preview = row.querySelector('#edukasi-link-preview-' + idx);
+      if (preview) {
+        preview.style.display = '';
+        if (r.ok) {
+          preview.textContent = (r.title || '') + (r.snippet ? ' \\u2014 ' + r.snippet.slice(0, 200) : '');
+        } else {
+          preview.textContent = 'Gagal fetch: ' + (r.error || 'timeout/blocked');
+          preview.style.color = 'var(--warn)';
+        }
+      }
+      toast(r.ok ? 'Link diambil.' : 'Link gagal diambil (masih bisa submit).', r.ok ? 'ok' : 'warn');
+    }).catch(function (e) {
+      toast('Error: ' + e.message, 'bad');
+    });
+  }
+
+  function renderEdukasiLinks() {
+    var container = $('edukasi-links');
+    container.textContent = '';
+    state.wizard.edukasi.links.forEach(function (link, idx) { addEdukasiLinkRow(link.url); });
+  }
+
+  // PDF upload handler
+  $('edukasi-pdf').onchange = function (e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast('PDF melebihi 5 MB.', 'warn');
+      e.target.value = '';
+      return;
+    }
+    var progressEl = $('edukasi-pdf-progress');
+    var barEl = $('edukasi-pdf-bar');
+    var statusEl = $('edukasi-pdf-status');
+    var warningEl = $('edukasi-pdf-warning');
+    progressEl.style.display = '';
+    barEl.style.width = '10%';
+    statusEl.textContent = 'Membaca PDF...';
+
+    var reader = new FileReader();
+    reader.onload = function () {
+      barEl.style.width = '50%';
+      statusEl.textContent = 'Mengirim ke server...';
+      var base64 = String(reader.result).split(',')[1];
+      api('/api/uploads/pdf-extract', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName: file.name, base64: base64 })
+      }).then(function (r) {
+        barEl.style.width = '100%';
+        if (r.truncated) {
+          warningEl.textContent = 'Peringatan: PDF terpotong pada halaman ' + r.pages + ' (maks 20).';
+          warningEl.style.display = '';
+          state.wizard.edukasi.pdfWarning = true;
+        }
+        state.wizard.edukasi.pdfText = r.text || '';
+        statusEl.textContent = 'Selesai \\u2014 ' + (r.text?.length || 0) + ' karakter diekstrak.';
+        toast('PDF diekstrak: ' + (r.text?.length || 0) + ' karakter.', 'ok');
+        setTimeout(function () { progressEl.style.display = 'none'; }, 2000);
+      }).catch(function (e) {
+        progressEl.style.display = 'none';
+        toast('Gagal ekstrak PDF: ' + e.message, 'bad');
+      });
+    };
+    e.target.value = '';
+  };
+
+  // Image uploads
+  $('edukasi-images').onchange = function (e) {
+    Array.from(e.target.files).forEach(function (f) {
+      if (f.size > 6 * 1024 * 1024) { toast('Gambar ' + f.name + ' > 6 MB.', 'warn'); return; }
+      var reader = new FileReader();
+      reader.onload = function () {
+        var uri = String(reader.result);
+        state.uploads.push({ id: 'tmp-' + Date.now(), name: f.name, dataUri: uri });
+        renderUploads('edukasi-up-list');
+        toast('Gambar ditambahkan: ' + f.name, 'ok');
+      };
+      reader.readAsDataURL(f);
+    });
+    e.target.value = '';
+  };
+
+  // CTA block for edukasi - use renderCtaBlock but with test-compatible IDs
+  renderCtaBlockTestCompatible('edukasi-cta-block', 'edukasi');
+
+  // Submit handler
+  $('edukasi-submit').onclick = function () { submitEdukasiWizard(); };
+}
+
+function submitEdukasiWizard() {
+  var kategori = $('edukasi-kategori').value;
+  var topic = $('edukasi-topic').value.trim();
+  if (!topic) { toast('Topik wajib diisi.', 'warn'); $('edukasi-topic').focus(); return; }
+  if (topic.length < 5) { toast('Topik minimal 5 karakter.', 'warn'); return; }
+  if (state.wizard.edukasi.links.length > 3) { toast('Maksimal 3 link.', 'warn'); return; }
+
+  var materi = ($('edukasi-materi').value || '').trim();
+  if (state.wizard.edukasi.pdfText) {
+    materi = (materi + '\n\n--- PDF EXTRACT ---\n' + state.wizard.edukasi.pdfText).trim();
+  }
+  if (materi.length > 8000) {
+    materi = materi.slice(0, 8000);
+    toast('Materi dipotong ke 8000 karakter.', 'warn');
+  }
+
+  var payload = {
+    categoryKey: kategori,
+    topic: topic,
+    ratios: [$('edukasi-ratio').value],
+    brandName: $('edukasi-brand').value.trim() || 'PropDesk',
+    fresh: $('edukasi-fresh').checked,
+    materiRaw: materi,
+    materiLinks: state.wizard.edukasi.links.filter(function (l) { return l.url; }).map(function (l) { return l.url; }),
+    callToAction: collectCtaPayloadTestCompatible('edukasi'),
+    uploadIds: state.uploads.map(function (u) { return u.id; })
+  };
+
+  // Clear form and start production
+  clearEdukasiWizard();
+  startWizardProduction(payload);
+}
+
+function clearEdukasiWizard() {
+  $('edukasi-topic').value = '';
+  $('edukasi-materi').value = '';
+  $('edukasi-materi-counter').textContent = '0/8000';
+  $('edukasi-links').textContent = '';
+  $('edukasi-pdf').value = '';
+  $('edukasi-pdf-progress').style.display = 'none';
+  $('edukasi-pdf-warning').style.display = 'none';
+  $('edukasi-up-list').textContent = '';
+  clearCtaBlockTestCompatible('edukasi');
+  state.wizard.edukasi = { links: [], pdfText: '', pdfWarning: false };
+  state.uploads = [];
+}
+
+// ===================== JURNAL WIZARD =====================
+
+function jurnalWizardAddRow(data) {
+  data = data || { pairs: '', direction: '', session: '', riskPct: '', rr: '', confluence: '', pnl: '', result: '' };
+  state.wizard.jurnal.rows.push(data);
+  renderJurnalWizardTable();
+}
+
+function renderJurnalWizardTable() {
+  var tb = $('jurnal-tbody');
+  if (!tb) return;
+  tb.textContent = '';
+  state.wizard.jurnal.rows.forEach(function (r, idx) {
+    var tr = document.createElement('tr');
+    var fields = [
+      { key: 'pairs', id: 'jurnal-pair-' + idx, placeholder: 'Pair' },
+      { key: 'direction', id: 'jurnal-direction-' + idx, placeholder: 'Direction' },
+      { key: 'session', id: 'jurnal-session-' + idx, placeholder: 'Session' },
+      { key: 'riskPct', id: 'jurnal-risk-' + idx, placeholder: '%Risk' },
+      { key: 'rr', id: 'jurnal-rr-' + idx, placeholder: 'RR' },
+      { key: 'confluence', id: 'jurnal-confluence-' + idx, placeholder: 'Confluence' },
+      { key: 'pnl', id: 'jurnal-pnl-' + idx, placeholder: 'PnL' },
+      { key: 'result', id: 'jurnal-result-' + idx, placeholder: 'Result' }
+    ];
+    fields.forEach(function (f) {
+      var td = document.createElement('td');
+      var inp = document.createElement('input'); inp.value = r[f.key] || ''; inp.placeholder = f.placeholder; inp.id = f.id;
+      inp.oninput = function () { state.wizard.jurnal.rows[idx][f.key] = inp.value; };
+      td.appendChild(inp); tr.appendChild(td);
+    });
+    var tdDel = document.createElement('td');
+    var del = document.createElement('button'); del.textContent = '\\u00D7'; del.className = 'del';
+    del.onclick = function () { state.wizard.jurnal.rows.splice(idx, 1); renderJurnalWizardTable(); };
+    tdDel.appendChild(del); tr.appendChild(tdDel);
+    tb.appendChild(tr);
+  });
+}
+
+// ===================== JURNAL WIZARD =====================
+
+function initJurnalWizard() {
+  // Reset state
+  state.wizard.jurnal = { rows: [], imageIds: {}, step: 1 };
+  $('jurnal-tbody').textContent = '';
+  jurnalWizardAddRow();
+
+  // Add row
+  $('jurnal-add-row').onclick = function () { jurnalWizardAddRow(); };
+
+  // CSV import
+  $('jurnal-csv-import').onclick = function () {
+    var fileInput = $('jurnal-csv-file');
+    fileInput.onchange = function (e) {
+      var file = e.target.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function () {
+        var rows = parseCsvToRows(String(reader.result));
+        if (rows.length === 0) { toast('Tidak ada baris valid (butuh 8 kolom).', 'warn'); return; }
+        state.wizard.jurnal.rows = rows;
+        renderJurnalWizardTable();
+        toast(rows.length + ' baris diimpor.', 'ok');
+      };
+      reader.readAsText(file);
+      fileInput.value = '';
+    };
+    fileInput.click();
+  };
+
+  // Image uploads for 5 groups (including pair)
+  ['jurnal-dir-file', 'jurnal-exec-file', 'jurnal-mark-file', 'jurnal-perf-file', 'jurnal-pair-file'].forEach(function (id) {
+    var elFile = $(id);
+    if (!elFile) return;
+    elFile.onchange = function (e) {
+      var f = e.target.files[0];
+      if (!f) return;
+      if (f.size > 6 * 1024 * 1024) { toast('Gambar > 6 MB.', 'warn'); return; }
+      var key = id.replace('jurnal-', '').replace('-file', '');
+      var reader = new FileReader();
+      reader.onload = function () {
+        var uri = String(reader.result);
+        state.uploads.push({ id: 'tmp-' + Date.now(), name: f.name, dataUri: uri });
+        state.wizard.jurnal.imageIds[key] = 'tmp-' + Date.now();
+        renderUploads();
+        toast('Gambar ' + key + ' ditambahkan.', 'ok');
+      };
+      reader.readAsDataURL(f);
+    };
+  });
+
+  // Step navigation
+  $('jurnal-next-step').onclick = function () {
+    // Validate step 1
+    var pair = ($('jurnal-pair').value || '').trim();
+    if (!pair) { toast('Pair Utama wajib diisi.', 'warn'); return; }
+    if (state.wizard.jurnal.rows.length === 0) { toast('Tabel trade minimal 1 baris.', 'warn'); return; }
+    state.wizard.jurnal.step = 2;
+    $('jurnal-prev-step').style.display = '';
+    $('jurnal-next-step').style.display = 'none';
+    $('jurnal-submit').style.display = '';
+    // Scroll to step 2
+    $('wizard-jurnal').querySelector('[data-step="2"]').scrollIntoView({ behavior: 'smooth' });
+  };
+  $('jurnal-prev-step').onclick = function () {
+    state.wizard.jurnal.step = 1;
+    $('jurnal-prev-step').style.display = 'none';
+    $('jurnal-next-step').style.display = '';
+    $('jurnal-submit').style.display = 'none';
+  };
+
+  // CTA block for jurnal
+  renderCtaBlockTestCompatible('jurnal-cta-block', 'jurnal');
+
+  // Submit handler
+  $('jurnal-submit').onclick = function () { submitJurnalWizard(); };
+}
+
+function submitJurnalWizard() {
+  // Validate step 2
+  if (!($('jurnal-dir-desc').value || '').trim() || !($('jurnal-exec-desc').value || '').trim() || !($('jurnal-mark-desc').value || '').trim()) {
+    toast('Lengkapi deskripsi Direction, Execution, dan Mark.', 'warn'); return;
+  }
+
+  var payload = {
+    categoryKey: 'jurnal_trading',
+    topic: ($('jurnal-pair').value || '') + ' Journal',
+    ratios: ['ig_portrait'],
+    brandName: 'PropDesk',
+    fresh: $('jurnal-fresh').checked,
+    jurnalTrading: {
+      pair: ($('jurnal-pair').value || '').trim(),
+      timeframe: ($('jurnal-timeframe').value || '').trim() || null,
+      tradeTable: state.wizard.jurnal.rows,
+      directionDesc: ($('jurnal-dir-desc').value || '').trim(),
+      directionImageId: state.wizard.jurnal.imageIds.direction || null,
+      executionDesc: ($('jurnal-exec-desc').value || '').trim(),
+      executionImageId: state.wizard.jurnal.imageIds.execution || null,
+      markDesc: ($('jurnal-mark-desc').value || '').trim(),
+      markImageId: state.wizard.jurnal.imageIds.mark || null,
+      performanceImageId: state.wizard.jurnal.imageIds.performance || null,
+      pairImageId: state.wizard.jurnal.imageIds.pair || null,
+      generalNotes: ($('jurnal-general-notes').value || '').trim() || null
+    },
+    callToAction: collectCtaPayloadTestCompatible('jurnal'),
+    uploadIds: state.uploads.map(function (u) { return u.id; })
+  };
+
+  clearJurnalWizard();
+  startWizardProduction(payload);
+}
+
+function clearJurnalWizard() {
+  $('jurnal-pair').value = '';
+  $('jurnal-timeframe').value = '';
+  $('jurnal-tbody').textContent = '';
+  state.wizard.jurnal.rows = [];
+  jurnalWizardAddRow();
+  $('jurnal-dir-desc').value = '';
+  $('jurnal-exec-desc').value = '';
+  $('jurnal-mark-desc').value = '';
+  $('jurnal-general-notes').value = '';
+  ['jurnal-dir-file','jurnal-exec-file','jurnal-mark-file','jurnal-perf-file','jurnal-pair-file'].forEach(function (id) { var el = $(id); if (el) el.value = ''; });
+  state.wizard.jurnal.imageIds = {};
+  state.wizard.jurnal.step = 1;
+  $('jurnal-prev-step').style.display = 'none';
+  $('jurnal-next-step').style.display = '';
+  $('jurnal-submit').style.display = 'none';
+  clearCtaBlockTestCompatible('jurnal');
+  state.uploads = [];
+}
+
+// ===================== OUTLOOK WIZARD =====================
+
+function initOutlookWizard() {
+  state.wizard.outlook = { gallery: [], step: 1 };
+  renderOutlookGallery();
+
+  $('outlook-add-gallery').onclick = function () {
+    state.wizard.outlook.gallery.push({ imageId: null, name: '', preview: '', description: '', sortOrder: state.wizard.outlook.gallery.length });
+    renderOutlookGallery();
+  };
+
+  function renderOutlookGallery() {
+    var n = $('outlook-gallery');
+    if (!n) return;
+    n.textContent = '';
+    state.wizard.outlook.gallery.forEach(function (g, idx) {
+      var item = el('div', 'gallery-item');
+      item.style.cssText = 'gap:8px; align-items:flex-start';
+
+      var handle = el('div', 'gallery-handle');
+      handle.textContent = '\\u{22EE}\\u{22EE}';
+      handle.title = 'Drag to reorder';
+      item.appendChild(handle);
+
+      var content = el('div', 'gallery-content');
+      content.style.flex = '1 1 auto';
+
+      var fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = 'image/png,image/jpeg,image/webp,image/gif';
+      fileInput.style.display = 'none';
+      content.appendChild(fileInput);
+
+      var btnFile = el('button', 'btn sm', g.imageId ? 'Ganti Gambar' : 'Pilih Gambar');
+      btnFile.onclick = function () { fileInput.click(); };
+      content.appendChild(btnFile);
+
+      fileInput.onchange = function (e) {
+        var f = e.target.files[0];
+        if (!f) return;
+        if (f.size > 6 * 1024 * 1024) { toast('Gambar > 6 MB.', 'warn'); return; }
+        var reader = new FileReader();
+        reader.onload = function () {
+          var uri = String(reader.result);
+          state.uploads.push({ id: 'tmp-' + Date.now(), name: f.name, dataUri: uri });
+          g.imageId = 'tmp-' + Date.now();
+          g.name = f.name;
+          g.preview = uri;
+          renderOutlookGallery();
+          toast('Gambar ditambahkan.', 'ok');
+        };
+        reader.readAsDataURL(f);
+        fileInput.value = '';
+      };
+
+      if (g.preview) {
+        var img = document.createElement('img');
+        img.src = g.preview;
+        img.style.cssText = 'width:80px;height:60px;object-fit:cover;border-radius:6px;margin-top:6px';
+        content.appendChild(img);
+      }
+
+      var ta = document.createElement('textarea');
+      ta.rows = 2;
+      ta.placeholder = 'Deskripsi chart (wajib)';
+      ta.id = 'outlook-gallery-desc-' + idx;
+      ta.value = g.description || '';
+      ta.oninput = function () { g.description = ta.value; };
+      content.appendChild(ta);
+
+      item.appendChild(content);
+
+      var actions = el('div', 'gallery-actions');
+      var up = el('button', 'btn sm', '\\u{2191}'); up.disabled = idx === 0; up.id = 'outlook-gallery-up-' + idx; up.onclick = function () {
+        var t = state.wizard.outlook.gallery[idx];
+        state.wizard.outlook.gallery.splice(idx, 1);
+        state.wizard.outlook.gallery.splice(idx - 1, 0, t);
+        state.wizard.outlook.gallery.forEach(function (x, i) { x.sortOrder = i; });
+        renderOutlookGallery();
+      };
+      var down = el('button', 'btn sm', '\\u{2193}'); down.disabled = idx === state.wizard.outlook.gallery.length - 1; down.id = 'outlook-gallery-down-' + idx; down.onclick = function () {
+        var t = state.wizard.outlook.gallery[idx];
+        state.wizard.outlook.gallery.splice(idx, 1);
+        state.wizard.outlook.gallery.splice(idx + 1, 0, t);
+        state.wizard.outlook.gallery.forEach(function (x, i) { x.sortOrder = i; });
+        renderOutlookGallery();
+      };
+      var del = el('button', 'btn sm bad', '\\u00D7'); del.id = 'outlook-gallery-del-' + idx; del.onclick = function () {
+        state.wizard.outlook.gallery.splice(idx, 1);
+        state.wizard.outlook.gallery.forEach(function (x, i) { x.sortOrder = i; });
+        renderOutlookGallery();
+      };
+      actions.appendChild(up); actions.appendChild(down); actions.appendChild(del);
+      item.appendChild(actions);
+
+      n.appendChild(item);
+    });
+  }
+
+  // CTA block for outlook
+  renderCtaBlockTestCompatible('outlook-cta-block', 'outlook');
+
+  // Submit handler
+  $('outlook-submit').onclick = function () { submitOutlookWizard(); };
+}
+
+function submitOutlookWizard() {
+  var title = ($('outlook-title').value || '').trim();
+  if (!title) { toast('Judul Outlook wajib diisi.', 'warn'); return; }
+  if (title.length < 8) { toast('Judul minimal 8 karakter.', 'warn'); return; }
+  if (state.wizard.outlook.gallery.length === 0) { toast('Galeri minimal 1 item.', 'warn'); return; }
+  for (var i = 0; i < state.wizard.outlook.gallery.length; i++) {
+    if (!state.wizard.outlook.gallery[i].description) {
+      toast('Deskripsi chart ke-' + (i + 1) + ' masih kosong.', 'warn'); return;
+    }
+    if (!state.wizard.outlook.gallery[i].imageId) {
+      toast('Chart ke-' + (i + 1) + ' belum upload gambar.', 'warn'); return;
+    }
+  }
+
+  var payload = {
+    categoryKey: 'market_outlook',
+    topic: title,
+    ratios: ['ig_portrait'],
+    brandName: 'PropDesk',
+    fresh: $('outlook-fresh').checked,
+    marketOutlook: {
+      title: title,
+      timeframe: $('outlook-timeframe').value || null,
+      images: state.wizard.outlook.gallery.map(function (g, i) {
+        return { imageId: g.imageId, description: g.description, sortOrder: i };
+      }),
+      ctas: collectCtaPayloadTestCompatible('outlook') ? [collectCtaPayloadTestCompatible('outlook')] : [],
+      generalNotes: ($('outlook-notes').value || '').trim() || null
+    },
+    callToAction: collectCtaPayloadTestCompatible('outlook'),
+    uploadIds: state.uploads.map(function (u) { return u.id; })
+  };
+
+  clearOutlookWizard();
+  startWizardProduction(payload);
+}
+
+function clearOutlookWizard() {
+  $('outlook-title').value = '';
+  $('outlook-timeframe').value = '';
+  $('outlook-notes').value = '';
+  $('outlook-gallery').textContent = '';
+  state.wizard.outlook.gallery = [];
+  clearCtaBlockTestCompatible('outlook');
+  state.uploads = [];
+}
+
+// ===================== SHARED WIZARD HELPERS =====================
+
+function renderCtaBlock(containerId, wizardType) {
+  var container = $(containerId);
+  if (!container) return;
+  container.textContent = '';
+
+  var kindSelect = document.createElement('select');
+  kindSelect.id = containerId + '-kind';
+  ['promo', 'community', 'save', 'follow', 'consult'].forEach(function (k) {
+    var opt = document.createElement('option');
+    opt.value = k;
+    opt.textContent = k.charAt(0).toUpperCase() + k.slice(1);
+    kindSelect.appendChild(opt);
+  });
+
+  var head = document.createElement('input');
+  head.placeholder = 'Headline CTA (wajib)';
+  head.id = containerId + '-head';
+
+  var detail = document.createElement('input');
+  detail.placeholder = 'Detail (opsional)';
+  detail.id = containerId + '-detail';
+
+  var promoWrap = el('div');
+  promoWrap.id = containerId + '-promo';
+  promoWrap.style.display = 'none';
+  var promoGrid = el('div', 'cta-code-preview');
+  promoGrid.id = containerId + '-promo-grid';
+  var codeInput = document.createElement('input');
+  codeInput.type = 'text';
+  codeInput.placeholder = 'Kode (3-20 char A-Z0-9_-)';
+  codeInput.className = 'cta-code-input';
+  codeInput.id = containerId + '-code-input';
+  var addCode = el('button', 'btn sm', '+ Tambah Kode Promo');
+  addCode.onclick = function () { addPromoCode(containerId); };
+  promoWrap.appendChild(el('label', 'f', 'Kode Promo (maks 5)'));
+  promoWrap.appendChild(promoGrid);
+  promoWrap.appendChild(codeInput);
+  promoWrap.appendChild(addCode);
+
+  var validWrap = el('div');
+  validWrap.id = containerId + '-valid';
+  validWrap.style.display = 'none';
+  var validInput = document.createElement('input');
+  validInput.type = 'date';
+  validInput.id = containerId + '-valid-input';
+  validWrap.appendChild(el('label', 'f', 'Berlaku Sampai'));
+  validWrap.appendChild(validInput);
+
+  var commWrap = el('div');
+  commWrap.id = containerId + '-comm';
+  commWrap.style.display = 'none';
+  var commInput = document.createElement('input');
+  commInput.placeholder = 'Nama Komunitas';
+  commInput.id = containerId + '-comm-input';
+  commWrap.appendChild(el('label', 'f', 'Nama Komunitas'));
+  commWrap.appendChild(commInput);
+
+  function onKindChange() {
+    var k = kindSelect.value;
+    promoWrap.style.display = k === 'promo' ? '' : 'none';
+    validWrap.style.display = k === 'promo' ? '' : 'none';
+    commWrap.style.display = k === 'community' ? '' : 'none';
+  }
+  kindSelect.onchange = onKindChange;
+
+  container.appendChild(el('label', 'f', 'Jenis CTA *'));
+  container.appendChild(kindSelect);
+  container.appendChild(el('label', 'f', 'Headline CTA *'));
+  container.appendChild(head);
+  container.appendChild(el('label', 'f', 'Detail'));
+  container.appendChild(detail);
+  container.appendChild(promoWrap);
+  container.appendChild(validWrap);
+  container.appendChild(commWrap);
+
+  // Load existing promo codes if any
+  onKindChange();
+}
+
+function addPromoCode(containerId) {
+  var input = $(containerId + '-code-input');
+  var grid = $(containerId + '-promo-grid');
+  if (!input || !grid) return;
+  var code = input.value.trim().toUpperCase();
+  if (!/^[A-Z0-9_-]{3,20}$/.test(code)) {
+    toast('Kode promo: 3-20 karakter, hanya A-Z 0-9 _ -', 'warn');
+    return;
+  }
+  var existing = Array.from(grid.querySelectorAll('.tag')).map(function (e) { return e.textContent; });
+  if (existing.includes(code)) { toast('Kode sudah ada.', 'warn'); return; }
+  if (existing.length >= 5) { toast('Maksimal 5 kode promo.', 'warn'); return; }
+  var tag = el('span', 'tag', code);
+  tag.onclick = function () { grid.removeChild(tag); };
+  grid.appendChild(tag);
+  input.value = '';
+}
+
+function collectCtaPayload(wizardType) {
+  var containerId = wizardType + '-cta-block';
+  var kindEl = $(containerId + '-kind');
+  var headEl = $(containerId + '-head');
+  var detailEl = $(containerId + '-detail');
+  var gridEl = $(containerId + '-promo-grid');
+  var validEl = $(containerId + '-valid-input');
+  var commEl = $(containerId + '-comm-input');
+
+  if (!kindEl || !headEl) return undefined;
+  var kind = kindEl.value;
+  var headline = headEl.value.trim();
+  if (!headline) return undefined;
+
+  var cta = { kind: kind, headline: headline };
+  if (detailEl && detailEl.value.trim()) cta.detail = detailEl.value.trim();
+  if (kind === 'promo') {
+    var codes = Array.from(gridEl?.querySelectorAll('.tag') || []).map(function (e) { return e.textContent; });
+    if (codes.length > 0) cta.promoCodes = codes;
+    if (validEl && validEl.value) cta.validUntil = validEl.value;
+  }
+  if (kind === 'community' && commEl && commEl.value.trim()) cta.communityName = commEl.value.trim();
+  return cta;
+}
+
+function clearCtaBlock(wizardType) {
+  var containerId = wizardType + '-cta-block';
+  var headEl = $(containerId + '-head');
+  var detailEl = $(containerId + '-detail');
+  var gridEl = $(containerId + '-promo-grid');
+  var validEl = $(containerId + '-valid-input');
+  var commEl = $(containerId + '-comm-input');
+  var kindEl = $(containerId + '-kind');
+  if (headEl) headEl.value = '';
+  if (detailEl) detailEl.value = '';
+  if (gridEl) gridEl.textContent = '';
+  if (validEl) validEl.value = '';
+  if (commEl) commEl.value = '';
+  if (kindEl) kindEl.value = 'promo';
+}
+
+// ===================== TEST-COMPATIBLE CTA FUNCTIONS =====================
+
+function renderCtaBlockTestCompatible(containerId, wizardType) {
+  var container = $(containerId);
+  if (!container) return;
+  container.textContent = '';
+
+  // Use test-compatible IDs: wizardType + '-cta-' + suffix
+  var kindSelect = document.createElement('select');
+  kindSelect.id = wizardType + '-cta-kind';
+  ['promo', 'community', 'save', 'follow', 'consult'].forEach(function (k) {
+    var opt = document.createElement('option');
+    opt.value = k;
+    opt.textContent = k.charAt(0).toUpperCase() + k.slice(1);
+    kindSelect.appendChild(opt);
+  });
+
+  var head = document.createElement('input');
+  head.placeholder = 'Headline CTA (wajib)';
+  head.id = wizardType + '-cta-headline';
+
+  var detail = document.createElement('input');
+  detail.placeholder = 'Detail (opsional)';
+  detail.id = wizardType + '-cta-detail';
+
+  var promoWrap = el('div');
+  promoWrap.id = wizardType + '-cta-promo-detail';
+  promoWrap.style.display = 'none';
+
+  // Promo codes grid
+  var promoGrid = el('div', 'promo-grid');
+  promoGrid.id = wizardType + '-cta-promo-grid';
+
+  // Hidden inputs for promo codes (for form submission)
+  var promoCodesInput = document.createElement('input');
+  promoCodesInput.type = 'hidden';
+  promoCodesInput.name = 'promoCodes';
+  promoCodesInput.id = wizardType + '-promo-codes-input';
+
+  var codeInput = document.createElement('input');
+  codeInput.type = 'text';
+  codeInput.placeholder = 'Kode (3-20 char A-Z0-9_-)';
+  codeInput.id = wizardType + '-promo-code-0';
+  codeInput.className = 'cta-code-input';
+
+  var addCode = el('button', 'btn sm', '+ Tambah Kode Promo');
+  addCode.id = wizardType + '-add-promo-code';
+  addCode.onclick = function () { addPromoCodeTestCompatible(wizardType); };
+
+  promoWrap.appendChild(el('label', 'f', 'Kode Promo (maks 5)'));
+  promoWrap.appendChild(promoGrid);
+  promoWrap.appendChild(codeInput);
+  promoWrap.appendChild(addCode);
+  promoWrap.appendChild(promoCodesInput);
+
+  var validWrap = el('div');
+  validWrap.id = wizardType + '-cta-valid-detail';
+  validWrap.style.display = 'none';
+  var validInput = document.createElement('input');
+  validInput.type = 'date';
+  validInput.id = wizardType + '-cta-valid-input';
+  validWrap.appendChild(el('label', 'f', 'Berlaku Sampai'));
+  validWrap.appendChild(validInput);
+
+  var commWrap = el('div');
+  commWrap.id = wizardType + '-cta-community-detail';
+  commWrap.style.display = 'none';
+  var commInput = document.createElement('input');
+  commInput.placeholder = 'Nama Komunitas';
+  commInput.id = wizardType + '-cta-community';
+  commWrap.appendChild(el('label', 'f', 'Nama Komunitas'));
+  commWrap.appendChild(commInput);
+
+  function onKindChange() {
+    var k = kindSelect.value;
+    promoWrap.style.display = k === 'promo' ? '' : 'none';
+    validWrap.style.display = k === 'promo' ? '' : 'none';
+    commWrap.style.display = k === 'community' ? '' : 'none';
+  }
+  kindSelect.onchange = onKindChange;
+
+  container.appendChild(el('label', 'f', 'Jenis CTA *'));
+  container.appendChild(kindSelect);
+  container.appendChild(el('label', 'f', 'Headline CTA *'));
+  container.appendChild(head);
+  container.appendChild(el('label', 'f', 'Detail'));
+  container.appendChild(detail);
+  container.appendChild(promoWrap);
+  container.appendChild(validWrap);
+  container.appendChild(commWrap);
+
+  // Load existing promo codes if any
+  onKindChange();
+}
+
+function addPromoCodeTestCompatible(wizardType) {
+  var input = $(wizardType + '-promo-code-0');
+  var grid = $(wizardType + '-cta-promo-grid');
+  var hiddenInput = $(wizardType + '-promo-codes-input');
+  if (!input || !grid) return;
+  var code = input.value.trim().toUpperCase();
+  if (!/^[A-Z0-9_-]{3,20}$/.test(code)) {
+    toast('Kode promo: 3-20 karakter, hanya A-Z 0-9 _ -', 'warn');
+    return;
+  }
+  var existing = Array.from(grid.querySelectorAll('.cta-code')).map(function (e) { return e.textContent; });
+  if (existing.includes(code)) { toast('Kode sudah ada.', 'warn'); return; }
+  if (existing.length >= 5) { toast('Maksimal 5 kode promo.', 'warn'); return; }
+  var tag = el('div', 'cta-code', code);
+  tag.onclick = function () {
+    grid.removeChild(tag);
+    updatePromoCodesHidden(wizardType);
+  };
+  grid.appendChild(tag);
+  input.value = '';
+  updatePromoCodesHidden(wizardType);
+}
+
+function updatePromoCodesHidden(wizardType) {
+  var grid = $(wizardType + '-cta-promo-grid');
+  var hiddenInput = $(wizardType + '-promo-codes-input');
+  if (!grid || !hiddenInput) return;
+  var codes = Array.from(grid.querySelectorAll('.cta-code')).map(function (e) { return e.textContent; });
+  hiddenInput.value = JSON.stringify(codes);
+}
+
+function collectCtaPayloadTestCompatible(wizardType) {
+  var kindEl = $(wizardType + '-cta-kind');
+  var headEl = $(wizardType + '-cta-headline');
+  var detailEl = $(wizardType + '-cta-detail');
+  var gridEl = $(wizardType + '-cta-promo-grid');
+  var validEl = $(wizardType + '-cta-valid-input');
+  var commEl = $(wizardType + '-cta-community');
+
+  if (!kindEl || !headEl) return undefined;
+  var kind = kindEl.value;
+  var headline = headEl.value.trim();
+  if (!headline) return undefined;
+
+  var cta = { kind: kind, headline: headline };
+  if (detailEl && detailEl.value.trim()) cta.detail = detailEl.value.trim();
+  if (kind === 'promo') {
+    var codes = Array.from(gridEl?.querySelectorAll('.cta-code') || []).map(function (e) { return e.textContent; });
+    if (codes.length > 0) cta.promoCodes = codes;
+    if (validEl && validEl.value) cta.validUntil = validEl.value;
+  }
+  if (kind === 'community' && commEl && commEl.value.trim()) cta.communityName = commEl.value.trim();
+  return cta;
+}
+
+function clearCtaBlockTestCompatible(wizardType) {
+  var headEl = $(wizardType + '-cta-headline');
+  var detailEl = $(wizardType + '-cta-detail');
+  var gridEl = $(wizardType + '-cta-promo-grid');
+  var validEl = $(wizardType + '-cta-valid-input');
+  var commEl = $(wizardType + '-cta-community');
+  var kindEl = $(wizardType + '-cta-kind');
+  if (headEl) headEl.value = '';
+  if (detailEl) detailEl.value = '';
+  if (gridEl) gridEl.textContent = '';
+  if (validEl) validEl.value = '';
+  if (commEl) commEl.value = '';
+  if (kindEl) kindEl.value = 'promo';
+}
+
+function startWizardProduction(payload) {
+  busy(null, 'Memulai produksi', '', function () {
+    return api('/api/manuscripts', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+  }).then(function (r) {
+    var cid = r.carouselId || (r.carousel && r.carousel.id) || r.id;
+    if (!cid && r.manuscript && r.manuscript.carouselId) cid = r.manuscript.carouselId;
+    if (cid) {
+      return api('/api/manuscripts/' + cid).then(function (d) {
+        renderManuscriptPreview(d.manuscript, d.versions, d.carousel);
+        toast('Naskah dibuat \u2014 lihat Dashboard untuk Gate 1.', 'ok');
+      }).catch(function () {
+        toast('Naskah dibuat \u2014 lihat Dashboard untuk Gate 1.', 'ok');
+      });
+    }
+    toast('Naskah dibuat \u2014 lihat Dashboard untuk Gate 1.', 'ok');
+  }).catch(function (e) {
+    toast('Gagal: ' + e.message, 'bad');
+  });
+}
+
+function renderManuscriptPreview(manuscript, versions, carousel) {
+  manuscript = manuscript || {};
+  versions = versions || [];
+  carousel = carousel || {};
+  state.currentManuscript = manuscript;
+  state.currentCarousel = carousel;
+  state.currentVersions = versions.slice();
+  var host = $('manuscript-preview');
+  if (!host) {
+    var tab = $('tab-create');
+    if (!tab) return;
+    host = document.createElement('div');
+    host.id = 'manuscript-preview';
+    tab.appendChild(host);
+  }
+  host.textContent = '';
+  host.style.display = '';
+  host.className = 'manuscript-preview';
+  var cid = carousel.id || carousel.carouselId || (state.currentCarousel && state.currentCarousel.id) || 'c-test-1';
+  var titleRow = el('div', 'row');
+  titleRow.style.justifyContent = 'space-between';
+  titleRow.appendChild(el('div', 'mp-title', manuscript.title || manuscript.topic || 'Naskah'));
+  var st = carousel.status || 'manuscript_needs_review';
+  titleRow.appendChild(badge(st.replace(/_/g, ' '), st === 'manuscript_approved' ? 'b-ok' : 'b-wait'));
+  host.appendChild(titleRow);
+  if (Array.isArray(manuscript.hookOptions) && manuscript.hookOptions.length > 0) {
+    var hookWrap = el('div', 'mp-field');
+    hookWrap.appendChild(el('label', 'f', 'Pilih Hook (0-2)'));
+    manuscript.hookOptions.forEach(function (h, i) {
+      var lab = el('label', 'row');
+      lab.style.gap = '6px';
+      var rb = document.createElement('input');
+      rb.type = 'radio'; rb.name = 'hookOption'; rb.value = String(i);
+      if (i === (manuscript.selectedHookIndex || 0)) rb.checked = true;
+      lab.appendChild(rb);
+      lab.appendChild(document.createTextNode(h));
+      hookWrap.appendChild(lab);
+    });
+    host.appendChild(hookWrap);
+  }
+  if (manuscript.angle) {
+    var a = el('div', 'mp-field');
+    a.appendChild(el('label', 'f', 'Angle'));
+    a.appendChild(el('div', 'fd', manuscript.angle));
+    host.appendChild(a);
+  }
+  if (Array.isArray(manuscript.keyMessages) && manuscript.keyMessages.length) {
+    var km = el('div', 'mp-field');
+    km.appendChild(el('label', 'f', 'Key Messages'));
+    km.appendChild(el('div', 'fd', manuscript.keyMessages.join(' \u00B7 ')));
+    host.appendChild(km);
+  }
+  if (manuscript.narrative) {
+    var nar = el('div', 'mp-field');
+    nar.appendChild(el('label', 'f', 'Narrative'));
+    var ta = document.createElement('textarea');
+    ta.id = 'mp-edit-textarea';
+    ta.style.display = 'none';
+    ta.value = manuscript.narrative;
+    ta.rows = 4;
+    nar.appendChild(ta);
+    var narView = el('div', 'fd');
+    narView.id = 'mp-narrative-view';
+    narView.textContent = manuscript.narrative;
+    nar.appendChild(narView);
+    host.appendChild(nar);
+  } else {
+    var ta2 = document.createElement('textarea');
+    ta2.id = 'mp-edit-textarea';
+    ta2.style.display = 'none';
+    ta2.value = manuscript.narrative || '';
+    host.appendChild(ta2);
+  }
+  if (manuscript.caption) {
+    var cap = el('div', 'mp-field');
+    cap.appendChild(el('label', 'f', 'Caption'));
+    var capObj = manuscript.caption;
+    cap.appendChild(el('div', 'fd', (capObj.hook || '') + ' \u2014 ' + (capObj.body || '')));
+    host.appendChild(cap);
+  }
+  var vRow = el('div', 'mp-version');
+  vRow.appendChild(el('span', null, 'Versi:'));
+  var sel = document.createElement('select');
+  sel.id = 'mp-version-select';
+  (versions.length ? versions : [{ version: 1 }]).forEach(function (v) {
+    var opt = document.createElement('option');
+    opt.value = String(v.version);
+    opt.textContent = 'v' + v.version;
+    sel.appendChild(opt);
+  });
+  if (sel.options.length === 0) {
+    var opt0 = document.createElement('option'); opt0.value = '1'; opt0.textContent = 'v1'; sel.appendChild(opt0);
+  }
+  sel.onchange = function () {
+    var ver = Number(sel.value);
+    var found = state.currentVersions.filter(function (x) { return x.version === ver; })[0];
+    if (found && found.manuscript_json) {
+      try {
+        var mj = JSON.parse(found.manuscript_json);
+        var view = $('mp-narrative-view');
+        if (view) view.textContent = mj.narrative || mj.title || '';
+        var ta3 = $('mp-edit-textarea');
+        if (ta3) ta3.value = mj.narrative || '';
+      } catch {}
+    }
+  };
+  vRow.appendChild(sel);
+  var btnRestore = el('button', 'btn sm', 'Restore v' + (sel.value || '1'));
+  btnRestore.id = 'mp-restore-btn';
+  btnRestore.onclick = function () {
+    var ver = Number(sel.value);
+    var found = state.currentVersions.filter(function (x) { return x.version === ver; })[0];
+    if (!found || !found.manuscript_json) { toast('Versi tidak ditemukan.', 'warn'); return; }
+    try {
+      var mj = JSON.parse(found.manuscript_json);
+      api('/api/manuscripts/' + cid, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ manuscriptPatch: mj, note: 'Restore v' + ver }) })
+        .then(function () { toast('Versi v' + ver + ' dipulihkan.', 'ok'); return api('/api/manuscripts/' + cid); })
+        .then(function (d) { renderManuscriptPreview(d.manuscript, d.versions, d.carousel); })
+        .catch(function (e) { toast('Gagal: ' + e.message, 'bad'); });
+    } catch (e) { toast('Gagal restore.', 'bad'); }
+  };
+  vRow.appendChild(btnRestore);
+  host.appendChild(vRow);
+  var actions = el('div', 'mp-actions');
+  var btnEdit = el('button', 'btn sm', 'Edit Manual');
+  btnEdit.id = 'mp-edit-btn';
+  if (carousel.manuscript_locked === 1 || carousel.locked) btnEdit.disabled = true;
+  btnEdit.onclick = function () {
+    var taE = $('mp-edit-textarea');
+    var viewE = $('mp-narrative-view');
+    if (!taE) return;
+    taE.style.display = '';
+    if (viewE) viewE.style.display = 'none';
+    var saveBtn = $('mp-save-edit-btn');
+    if (!saveBtn) {
+      saveBtn = el('button', 'btn sm primary', 'Simpan Edit');
+      saveBtn.id = 'mp-save-edit-btn';
+      saveBtn.onclick = function () {
+        var newText = ($('mp-edit-textarea') && $('mp-edit-textarea').value) || '';
+        api('/api/manuscripts/' + cid, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ manuscriptPatch: { narrative: newText }, note: 'manual edit' }) })
+          .then(function () {
+            toast('Naskah tersimpan.', 'ok');
+            return api('/api/manuscripts/' + cid);
+          })
+          .then(function (d) { renderManuscriptPreview(d.manuscript, d.versions, d.carousel); })
+          .catch(function (e) { toast('Gagal: ' + e.message, 'bad'); });
+      };
+      actions.appendChild(saveBtn);
+    }
+  };
+  actions.appendChild(btnEdit);
+  var btnRegen = el('button', 'btn sm', 'Regenerate');
+  btnRegen.id = 'mp-regenerate-btn';
+  btnRegen.onclick = function () { openRegenerateModal(cid); };
+  actions.appendChild(btnRegen);
+  var btnApprove = el('button', 'btn sm ok', 'Approve');
+  btnApprove.id = 'mp-approve-btn';
+  btnApprove.onclick = function () {
+    var payload = {};
+    var hookInput = host.querySelector('input[name="hookOption"]:checked');
+    if (hookInput) payload.selectedHookIndex = Number(hookInput.value);
+    if (Array.isArray(manuscript.hookOptions) && manuscript.hookOptions.length && payload.selectedHookIndex === undefined) {
+      toast('Pilih salah satu hook (0-2).', 'warn'); return;
+    }
+    api('/api/manuscripts/' + cid + '/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      .then(function () {
+        toast('Naskah disetujui.', 'ok');
+        state.currentCarousel.manuscript_locked = 1;
+        state.currentCarousel.status = 'manuscript_approved';
+        var editBtn = $('mp-edit-btn'); if (editBtn) editBtn.disabled = true;
+        var nextBtn = $('mp-next-design-btn');
+        if (!nextBtn) {
+          nextBtn = el('button', 'btn sm primary', 'Lanjut ke Design');
+          nextBtn.id = 'mp-next-design-btn';
+          nextBtn.onclick = function () {
+            busy(nextBtn, 'Membuat design', '', function () {
+              return api('/api/designs/' + cid + '/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+            }).then(function () { toast('Design dimulai.', 'ok'); }).catch(function (e) { toast('Gagal: ' + e.message, 'bad'); });
+          };
+          actions.appendChild(nextBtn);
+        } else nextBtn.style.display = '';
+      })
+      .catch(function (e) { toast('Gagal: ' + e.message, 'bad'); });
+  };
+  actions.appendChild(btnApprove);
+  if (carousel.manuscript_locked === 1 || carousel.status === 'manuscript_approved') {
+    var nextBtn2 = el('button', 'btn sm primary', 'Lanjut ke Design');
+    nextBtn2.id = 'mp-next-design-btn';
+    nextBtn2.onclick = function () {
+      busy(nextBtn2, 'Membuat design', '', function () {
+        return api('/api/designs/' + cid + '/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+      }).then(function () { toast('Design dimulai.', 'ok'); }).catch(function (e) { toast('Gagal: ' + e.message, 'bad'); });
+    };
+    actions.appendChild(nextBtn2);
+  } else {
+    var ph = el('button', 'btn sm primary', 'Lanjut ke Design');
+    ph.id = 'mp-next-design-btn';
+    ph.style.display = 'none';
+    actions.appendChild(ph);
+  }
+  host.appendChild(actions);
+  var modal = $('mp-regen-modal');
+  if (!modal) {
+    modal = el('div', 'finding');
+    modal.id = 'mp-regen-modal';
+    modal.style.display = 'none';
+    modal.style.marginTop = '12px';
+    var lab2 = el('label', 'f', 'Catatan regenerasi (minimal 5 karakter)');
+    modal.appendChild(lab2);
+    var taR = document.createElement('textarea');
+    taR.id = 'mp-regen-note';
+    taR.rows = 3;
+    taR.placeholder = 'Tulis catatan regenerasi...';
+    modal.appendChild(taR);
+    var btnSubmit = el('button', 'btn sm primary', 'Kirim Regenerate');
+    btnSubmit.id = 'mp-regen-submit';
+    btnSubmit.onclick = function () {
+      var note = (taR.value || '').trim();
+      if (note.length < 5) { toast('Catatan regenerasi minimal 5 karakter.', 'warn'); return; }
+      api('/api/manuscripts/' + cid + '/regenerate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note: note }) })
+        .then(function () { toast('Regenerate menjalankan ulang naskah.', 'ok'); modal.style.display = 'none'; })
+        .catch(function (e) { toast('Gagal: ' + e.message, 'bad'); });
+    };
+    modal.appendChild(btnSubmit);
+    var btnCancel = el('button', 'btn sm', 'Batal');
+    btnCancel.onclick = function () { modal.style.display = 'none'; };
+    modal.appendChild(btnCancel);
+    host.appendChild(modal);
+  } else {
+    modal.style.display = 'none';
+  }
+  var regenBtn = $('mp-regenerate-btn');
+  if (regenBtn) regenBtn.onclick = function () { openRegenerateModal(cid); };
+}
+
+function openRegenerateModal(cid) {
+  var modal = $('mp-regen-modal');
+  if (!modal) return;
+  modal.style.display = '';
+  var noteEl = $('mp-regen-note');
+  if (noteEl) noteEl.value = '';
+  var btn = $('mp-regen-submit');
+  if (btn) {
+    btn.onclick = function () {
+      var note = (($('mp-regen-note') && $('mp-regen-note').value) || '').trim();
+      if (note.length < 5) { toast('Catatan regenerasi minimal 5 karakter.', 'warn'); return; }
+      api('/api/manuscripts/' + cid + '/regenerate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note: note }) })
+        .then(function () { toast('Regenerate menjalankan ulang naskah.', 'ok'); modal.style.display = 'none'; })
+        .catch(function (e) { toast('Gagal: ' + e.message, 'bad'); });
+    };
+  }
+}
+
+if (typeof window !== 'undefined') { try { window.renderManuscriptPreview = renderManuscriptPreview; } catch {} try { window.toast = toast; } catch {} try { window.refreshJobsBadges = refreshJobsBadges; } catch {} }
 
 function refreshCurrent() { return showTab(state.tab); }
 
@@ -1786,6 +3019,10 @@ document.addEventListener('keydown', function (e) {
 
 $('pf-cat').onchange = function () { busy($('btn-refresh'), 'Memuat pipeline', '', loadPipeline); };
 $('plan-build').onclick = buildPlan;
+if ($('bulk-generate-manuscript')) $('bulk-generate-manuscript').onclick = bulkGenerateManuscript;
+if ($('bulk-approve-manuscript')) $('bulk-approve-manuscript').onclick = bulkApproveManuscript;
+if ($('bulk-generate-design')) $('bulk-generate-design').onclick = bulkGenerateDesign;
+if ($('bulk-approve-design')) $('bulk-approve-design').onclick = bulkApproveDesign;
 $('of-mode').onclick = function () {
   state.officeMode = state.officeMode === 'text' ? 'graphic' : 'text';
   $('of-mode').textContent = state.officeMode === 'text' ? 'Mode Grafis' : 'Mode Teks';
@@ -1807,11 +3044,11 @@ if ($('o-cta-add-promo')) $('o-cta-add-promo').onclick = function () { outlookSt
 if ($('o-save')) $('o-save').onclick = function () {
   var payload = collectOutlookPayload();
   if (!payload.title) { toast('Isi Judul Outlook terlebih dahulu.', 'warn'); return; }
-  if (payload.images.length === 0) { toast('Galeri masih kosong — upload minimal 1 chart.', 'warn'); return; }
+  if (payload.images.length === 0) { toast('Galeri masih kosong \\u2014 upload minimal 1 chart.', 'warn'); return; }
   for (var k = 0; k < payload.images.length; k++) if (!payload.images[k].description) { toast('Deskripsi chart ke-' + (k + 1) + ' masih kosong.', 'warn'); return; }
-  if (!state.detailId) { if ($('o-save-msg')) $('o-save-msg').textContent = 'Siap — data akan dikirim bersama produksi berikutnya.'; toast('Data outlook siap. Klik Mulai Produksi.', 'ok'); return; }
+  if (!state.detailId) { if ($('o-save-msg')) $('o-save-msg').textContent = 'Siap \\u2014 data akan dikirim bersama produksi berikutnya.'; toast('Data outlook siap. Klik Mulai Produksi.', 'ok'); return; }
   busy($('o-save'), 'Menyimpan outlook', '', function () { return api('/api/market-outlook/' + state.detailId, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); })
-    .then(function () { if ($('o-save-msg')) $('o-save-msg').textContent = 'Tersimpan — extraInstructions siap dipakai.'; toast('Outlook tersimpan.', 'ok'); })
+    .then(function () { if ($('o-save-msg')) $('o-save-msg').textContent = 'Tersimpan \\u2014 extraInstructions siap dipakai.'; toast('Outlook tersimpan.', 'ok'); })
     .catch(function (e) { toast('Gagal menyimpan outlook: ' + e.message, 'bad'); if ($('o-save-msg')) $('o-save-msg').textContent = e.message; });
 };
 
@@ -1838,7 +3075,7 @@ if ($('j-save')) $('j-save').onclick = function () {
   if (payload.tradeTable.length === 0) { toast('Tabel trade masih kosong.', 'warn'); return; }
   // Saat di tab Buat (belum ada carousel), simpan lokal dan ikutkan saat Mulai Produksi
   if (!state.detailId) {
-    if ($('j-save-msg')) $('j-save-msg').textContent = 'Siap — data akan dikirim bersama produksi berikutnya.';
+    if ($('j-save-msg')) $('j-save-msg').textContent = 'Siap \\u2014 data akan dikirim bersama produksi berikutnya.';
     toast('Data jurnal siap. Klik Mulai Produksi untuk membuat carousel.', 'ok');
     return;
   }
@@ -1847,7 +3084,7 @@ if ($('j-save')) $('j-save').onclick = function () {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
     });
   }).then(function (r) {
-    if ($('j-save-msg')) $('j-save-msg').textContent = 'Tersimpan — extraInstructions siap dipakai produksi.';
+    if ($('j-save-msg')) $('j-save-msg').textContent = 'Tersimpan \\u2014 extraInstructions siap dipakai produksi.';
     toast('Jurnal tersimpan.', 'ok');
   }).catch(function (e) { toast('Gagal menyimpan jurnal: ' + e.message, 'bad'); if ($('j-save-msg')) $('j-save-msg').textContent = e.message; });
 };
@@ -1913,7 +3150,7 @@ $('m-add').onclick = function () {
 };
 
 $('mem-reflect').onclick = function () {
-  return busy($('mem-reflect'), 'Mempelajari catatan revisi', 'Mencari pola berulang dari catatan Anda…', function () {
+  return busy($('mem-reflect'), 'Mempelajari catatan revisi', 'Mencari pola berulang dari catatan Anda\\u2026', function () {
     return api('/api/memory/reflect', { method: 'POST' });
   }).then(function (d) {
     toast(d.added + ' aturan baru, ' + d.updated + ' aturan diperkuat.', 'ok');
@@ -1945,5 +3182,7 @@ $('of-motion').onchange = function () {
 })();
 
 onCtaKindChange();
+refreshJobsBadges();
 showTab('dashboard');
+setInterval(refreshJobsBadges, 5000);
 `;

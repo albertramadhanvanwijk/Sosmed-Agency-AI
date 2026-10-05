@@ -986,18 +986,17 @@ export function decideCarousel(
   if (decision === 'approved') {
     const row = getCarousel(db, id);
     if (!row) throw new Error('Carousel tidak ditemukan.');
+    // Verbatim compliance block message for Gate 2 (manuscript_locked=1)
+    const isGate2 = row.manuscript_locked === 1;
+    const blockMsg = isGate2 ? 'Carousel diblokir kepatuhan' : 'Carousel ini diblokir oleh pemeriksaan kepatuhan dan tidak dapat disetujui. Perbaiki temuan bertanda BLOKIR lebih dulu.';
     if (row.compliance_blocked === 1) {
-      throw new Error(
-        'Carousel ini diblokir oleh pemeriksaan kepatuhan dan tidak dapat disetujui. Perbaiki temuan bertanda BLOKIR lebih dulu.',
-      );
+      throw new Error(blockMsg);
     }
     const blocking = db
       .prepare("SELECT count(*) AS n FROM compliance_findings WHERE carousel_id = ? AND result = 'fail' AND severity = 'block'")
       .get(id) as { n: number };
     if (blocking.n > 0) {
-      throw new Error(
-        `Masih ada ${blocking.n} temuan kepatuhan yang memblokir. Carousel tidak dapat disetujui sebelum diperbaiki.`,
-      );
+      throw new Error(blockMsg);
     }
   }
 

@@ -1,5 +1,5 @@
 /**
- * Gaya antarmuka Studio — pola Admin Dashboard.
+ * Gaya antarmuka Studio \u2014 pola Admin Dashboard.
  *
  * Dipisah dari berkas komposisi HTML karena dua alasan: berkasnya menjadi jauh
  * lebih mudah ditelusuri, dan gaya dapat diubah tanpa menyentuh struktur maupun
@@ -161,7 +161,7 @@ label.f { display: block; font-size: 11px; color: var(--muted); font-weight: 700
 label.f::after { content: ' *'; color: var(--danger); font-weight: 800; }
 .hint { font-size: 11.5px; color: var(--dim); margin-top: 5px; line-height: 1.5; }
 
-/* Category theme patterns — Item 6 */
+/* Category theme patterns \u2014 Item 6 */
 .cat-pattern-grid { background-image: linear-gradient(var(--cat-primary) 1px, transparent 1px), linear-gradient(90deg, var(--cat-primary) 1px, transparent 1px); background-size: 14px 14px; opacity: .06; }
 .cat-pattern-diagonal { background: repeating-linear-gradient(135deg, var(--cat-primary) 0 1px, transparent 1px 12px); opacity: .07; }
 .cat-pattern-dots { background-image: radial-gradient(var(--cat-primary) 1.2px, transparent 1.2px); background-size: 12px 12px; opacity: .08; }
@@ -290,7 +290,7 @@ table.tbl td.wrap { max-width: 320px; word-break: break-word; }
 .thumb .hold { width: 204px; height: 255px; }
 .thumb .cap { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(5,9,16,.92); padding: 4px 7px; font-size: 10.5px; color: var(--muted); display: flex; justify-content: space-between; }
 
-/* ===================== SLIDE ZOOM MODAL — Item 12 ===================== */
+/* ===================== SLIDE ZOOM MODAL \u2014 Item 12 ===================== */
 .slide-zoom { position: fixed; inset: 0; z-index: 75; display: none; place-items: center; background: rgba(3,6,12,.92); }
 .slide-zoom.on { display: flex; align-items: center; justify-content: center; }
 .slide-zoom .zoom-stage { position: relative; width: 100vw; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; }
@@ -394,4 +394,104 @@ button.btn.loading-btn::after {
   .stage { transform: scale(.44); }
   .drawer { width: 100vw; }
 }
+
+/* ===================== WIZARD STYLES ===================== */
+
+.wizard-nav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.wizard-nav .btn { transition: all .13s; }
+.wizard-nav .btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+.wizard-shell { animation: fadeIn .15s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+.wizard-step { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+.wizard-step:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+.wizard-step .fh { font-size: 14px; font-weight: 700; color: var(--accent-2); margin-bottom: 4px; }
+.wizard-step .fd { font-size: 12px; color: var(--dim); margin-bottom: 12px; }
+
+/* Repeatable rows for forms */
+.repeatable-container { display: flex; flex-direction: column; gap: 8px; }
+.repeatable-row { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+.repeatable-row .row { gap: 8px; margin-top: 8px; }
+.repeatable-row .btn.sm { flex-shrink: 0; }
+
+/* Promo codes grid */
+.promo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-top: 8px; }
+.promo-grid .cta-code {
+  background: linear-gradient(145deg, var(--accent), var(--primary));
+  color: #05101F;
+  font-family: var(--f-heading);
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 10px 14px;
+  border-radius: var(--r-badge);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  word-break: break-all;
+}
+
+/* Gallery items with drag handle */
+.gallery-item { display: flex; gap: 8px; align-items: flex-start; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
+.gallery-handle { width: 28px; height: 100%; min-height: 48px; background: var(--panel-3); border: 1px solid var(--line); border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; cursor: grab; color: var(--dim); font-size: 14px; user-select: none; }
+.gallery-handle:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+.gallery-handle:active { cursor: grabbing; }
+.gallery-content { flex: 1 1 auto; min-width: 0; }
+.gallery-content .f { margin-bottom: 3px; }
+.gallery-content input, .gallery-content textarea { width: 100%; }
+.gallery-actions { display: flex; flex-direction: column; gap: 4px; }
+.gallery-actions .btn { width: 100%; }
+
+/* Version dropdown for Gate 1 preview */
+.version-dropdown { min-width: 180px; }
+
+/* Counter warning when >8000 chars */
+.counter.warn { color: var(--warn) !important; }
+.counter.danger { color: var(--danger) !important; }
+
+/* PDF progress */
+.loading-progress { height: 4px; background: var(--panel-2); border-radius: 999px; overflow: hidden; }
+.loading-bar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent-2), var(--accent)); border-radius: 999px; transition: width .3s ease; }
+
+/* CTA block shared styles */
+.cta-kind-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; margin-bottom: 12px; }
+.cta-kind-row .btn { transition: all .13s; }
+.cta-kind-row .btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+.cta-promo-codes { margin-top: 12px; }
+.cta-promo-codes .row { gap: 8px; align-items: center; }
+.cta-code-input { width: 100px !important; font-family: var(--f-heading); font-size: 16px; font-weight: 700; text-transform: uppercase; text-align: center; }
+.cta-code-preview { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.cta-code-preview .tag { background: rgba(59,130,246,.2); border: 1px solid rgba(59,130,246,.4); color: #9CC6FF; padding: 3px 8px; border-radius: 6px; font-size: 12px; font-weight: 600; font-family: var(--f-heading); }
+
+/* Manuscript preview card */
+.manuscript-preview { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin-top: 12px; }
+.manuscript-preview .mp-title { font-size: 13px; font-weight: 700; color: var(--accent-2); margin-bottom: 8px; }
+.manuscript-preview .mp-field { margin-top: 10px; }
+.manuscript-preview .mp-field .f { margin-bottom: 4px; }
+.manuscript-preview .mp-field textarea { min-height: 80px; }
+.manuscript-preview .mp-actions { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+.manuscript-preview .mp-version { margin-top: 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--dim); }
+.manuscript-preview .mp-version select { min-width: 160px; }
+
+/* Plan bulk badges */
+.plan-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }
+.plan-badge.mn { background: rgba(34,197,94,.14); border: 1px solid rgba(34,197,94,.42); color: #93E8B0; }
+.plan-badge.dg { background: rgba(59,130,246,.16); border-color: rgba(59,130,246,.45); color: #9CC6FF; }
+.plan-badge.nr { background: rgba(245,158,11,.14); border-color: rgba(245,158,11,.45); color: #FFD08A; }
+.plan-badge.cr { background: rgba(239,68,68,.15); border-color: rgba(239,68,68,.45); color: #FFA8A8; }
+.plan-badge.wait { background: rgba(97,116,143,.14); border-color: rgba(97,116,143,.4); color: #A8BCD6; }
+
+/* Jobs badges */
+.jobs-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+.jobs-badge.manuscript { background: rgba(245,158,11,.14); border: 1px solid rgba(245,158,11,.45); color: #FFD08A; }
+.jobs-badge.design { background: rgba(59,130,246,.16); border: 1px solid rgba(59,130,246,.45); color: #9CC6FF; }
+
+/* Table input styles */
+.tbl input, .tbl select { width: 100%; padding: 6px 8px; font-size: 12.5px; background: #0C1322; color: var(--text); border: 1px solid var(--line); border-radius: 6px; }
+.tbl input:focus, .tbl select:focus { outline: none; border-color: var(--accent); }
+
+/* Upload progress */
+.upload-progress { height: 3px; background: var(--panel-2); border-radius: 999px; overflow: hidden; margin-top: 4px; }
+.upload-progress .bar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent-2), var(--accent)); border-radius: 999px; transition: width .3s ease; }
 `;

@@ -351,10 +351,14 @@ function visualBlock(slide: Slide): string {
     case 'stat_tile':
       if (!v.stats || v.stats.length === 0) return '';
       return statTiles(v.stats);
-    case 'chart_snapshot':
-      // Tangkapan grafik disediakan manusia/agen sebagai berkas lokal; template
-      // hanya menandai tempatnya agar render tidak bergantung pada jaringan.
+    case 'chart_snapshot': {
+      const ref = String(v.chartAssetRef ?? '');
+      if (ref.startsWith('data:')) {
+        const alt = esc(v.altText ?? 'chart');
+        return `<div class="chart-slot" style="border:none; padding:0;"><img src="${esc(ref)}" alt="${alt}" style="width:100%;height:auto;max-height:620px;object-fit:contain;border-radius:var(--r-card);display:block;" /></div>`;
+      }
       return `<div class="chart-slot"><span>Grafik: ${esc(v.chartAssetRef ?? 'tidak ada berkas')}</span></div>`;
+    }
     case 'abstract_bg':
       return '';
     case 'none':

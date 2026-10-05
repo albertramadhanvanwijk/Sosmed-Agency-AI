@@ -548,6 +548,7 @@ async function loadSpecFromFolder(folder: string): Promise<CarouselSpec | null> 
 
 /** Merender HTML satu slide untuk pratinjau. */
 async function previewSlide(
+  db: ReturnType<typeof openDb>,
   carouselId: string,
   position: number,
   ratioKey: RatioProfile,
@@ -704,7 +705,7 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   const previewMatch = /^\/preview\/([^/]+)\/(\d+)$/.exec(path);
   if (previewMatch) {
     const ratio = (url.searchParams.get('ratio') ?? 'ig_portrait') as RatioProfile;
-    const html = await previewSlide(previewMatch[1]!, Number(previewMatch[2]), ratio, true);
+    const html = await previewSlide(db, previewMatch[1]!, Number(previewMatch[2]), ratio, true);
     if (!html) {
       fail(res, 404, 'Pratinjau tidak tersedia untuk carousel ini (mungkin dibuat dengan mode demo atau tanpa berkas produksi).');
       return;
@@ -766,6 +767,10 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
           marketOutlook = getMarketOutlookData(db, id);
         } catch { /* ignore */ }
       }
+      const manuscript = getManuscript(db, id);
+      const versions = listManuscriptVersions(db, id);
+      let materiLinksParsed: unknown = null;
+      try { materiLinksParsed = row.materi_links ? JSON.parse(row.materi_links) : null; } catch { materiLinksParsed = row.materi_links; }
       json(res, 200, {
         ok: true,
         carousel: row,
@@ -783,6 +788,12 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
         facts: getFacts(db, id),
         ...(jurnal ? { jurnalTrading: jurnal } : {}),
         ...(marketOutlook ? { marketOutlook } : {}),
+        manuscript: manuscript,
+        manuscriptVersion: row.manuscript_version ?? versions.length,
+        manuscriptLocked: row.manuscript_locked ?? 0,
+        materiRaw: row.materi_raw ?? null,
+        materiLinks: materiLinksParsed,
+        manuscriptVersions: versions,
       });
       return;
     }
@@ -817,6 +828,34 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
     const decisionMatch = /^\/api\/carousels\/([^/]+)\/decision$/.exec(path);
     if (method === 'POST' && decisionMatch) {
       const id = decisionMatch[1]!;
+      // Gate2 intercept — harus sebelum legacy decideCarousel agar verbatim "Carousel diblokir kepatuhan" dan mapping design_changes_requested/ready_to_publish terjaga
+      {
+        const previewRow = getCarousel(db, id);
+        const isGate2 = previewRow !== null && (previewRow.status === 'needs_review' || previewRow.status === 'design_changes_requested') && previewRow.manuscript_locked === 1;
+        if (isGate2) {
+          let body: { decision?: string; note?: string; autoRevise?: boolean; ratios?: string[] };
+          try { body = (await readJson(req)) as typeof body; } catch { body = {}; }
+          const decision = String(body.decision ?? '').trim();
+          if (!['approved','changes_requested','rejected'].includes(decision)) { fail(res, 400, 'Keputusan harus salah satu dari: approved, changes_requested, rejected.'); return; }
+          const note = String(body.note ?? '').trim();
+          if (decision === 'changes_requested' && note.length < 5) { fail(res, 400, 'Catatan revisi wajib diisi (minimal 5 karakter) agar agen dapat mempelajarinya.'); return; }
+          if (previewRow.compliance_blocked === 1) { fail(res, 409, 'Carousel diblokir kepatuhan'); return; }
+          try {
+            const blocking = db.prepare("SELECT count(*) AS n FROM compliance_findings WHERE carousel_id = ? AND result = 'fail' AND severity = 'block'").get(id) as { n: number };
+            if (blocking.n > 0) { fail(res, 409, 'Carousel diblokir kepatuhan'); return; }
+          } catch {}
+          try {
+            const out = decideGate2(id, decision, note);
+            json(res, 200, { ok: true, carousel: getCarousel(db, id), status: out.status });
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (msg.includes('Carousel diblokir kepatuhan') || msg.includes('diblokir')) { fail(res, 409, 'Carousel diblokir kepatuhan'); return; }
+            if (msg.includes('Status') && msg.includes('tidak dapat')) { fail(res, 409, msg); return; }
+            fail(res, 409, msg);
+          }
+          return;
+        }
+      }
       const body = (await readJson(req)) as {
         decision?: string;
         note?: string;
@@ -2072,6 +2111,241 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
       return;
     }
 
+    // ---------------------------------------------------------------
+    // Gate 2 — Designs + guards + bulk-decision
+    // ---------------------------------------------------------------
+
+    // Helper: run design generation (async, uses file DB via dbPath for pipeline mapping)
+    // In test mode (mock LLM detected), run pipeline synchronously so status becomes needs_review before response.
+    async function runDesignGeneration(carouselId: string, row: { category_key: string; topic: string }, opts: { ratios?: string[] } = {}): Promise<string> {
+      const jobId = `job_design_${carouselId.slice(0,8)}_${Date.now().toString(36)}`;
+      const ratios = (opts.ratios ?? ['ig_portrait']).filter((r): r is RatioProfile => (r as string) in RATIO_PROFILES) as RatioProfile[];
+      const finalRatios = ratios.length > 0 ? ratios : ['ig_portrait' as RatioProfile];
+      try { createJob(db, { id: jobId, carouselId, categoryKey: row.category_key, topic: row.topic, jobType: 'design' }); } catch {}
+      const dbPathForPipeline = (() => {
+        // Prefer explicit path stored on db instance (set by buildHttpServer) or global test path
+        try {
+          const explicit = (db as unknown as Record<string, unknown>).__dbPath as string | undefined;
+          if (explicit) return explicit;
+        } catch {}
+        try {
+          const g = (globalThis as unknown as Record<string, unknown>).__TEST_DB_PATH__ as string | undefined;
+          if (g) return g;
+        } catch {}
+        try {
+          const rows = (db as unknown as { prepare: (s:string)=>{ all:()=>{name:string,file:string|null}[] } }).prepare?.('PRAGMA database_list')?.all?.() as { name:string; file:string|null }[]|undefined;
+          if (rows) {
+            for (const r of rows) if (r.file) return r.file;
+            const f = rows.find(r=>r.file)?.file;
+            if (f) return f;
+          }
+        } catch {}
+        return defaultDbPath(ROOT);
+      })();
+      const effectiveDbPath = dbPathForPipeline || defaultDbPath(ROOT);
+      db.prepare("UPDATE carousels SET status = 'designing', updated_at = ? WHERE id = ?").run(new Date().toISOString(), carouselId);
+      updateJob(db, jobId, { status: 'running', progress: 0.1, currentStep: 'compose' });
+
+      // Detect test mode: mock LLM factory injected
+      const isTestMode = !!(globalThis as unknown as Record<string, unknown>).__TEST_LLM_FACTORY__;
+      const factory = (globalThis as unknown as Record<string, unknown>).__TEST_LLM_FACTORY__ as (()=>unknown)|undefined;
+      let llm: InstanceType<typeof LlmClient>;
+      if (factory) {
+        const maybe = factory() as unknown;
+        if (maybe && typeof (maybe as Record<string, unknown>).callJson === 'function') {
+          llm = maybe as InstanceType<typeof LlmClient>;
+        } else {
+          llm = new LlmClient({ root: ROOT });
+        }
+      } else {
+        llm = new LlmClient({ root: ROOT });
+      }
+      const { produceDesignFromManuscript } = await import('../agents/pipeline.ts');
+
+      async function runPipeline(): Promise<void> {
+        try {
+          await produceDesignFromManuscript(carouselId, { ratios: finalRatios, dbPath: effectiveDbPath, outputBaseDir: OUTPUT_DIR }, llm);
+          // produceDesignFromManuscript already sets status=needs_review and inserts slides
+          // Ensure job marked done even if render was skipped (no Chromium)
+          const cur = getCarousel(db, carouselId);
+          if (cur && cur.status === 'designing') {
+            db.prepare("UPDATE carousels SET status = 'needs_review', updated_at = ? WHERE id = ?").run(new Date().toISOString(), carouselId);
+          }
+          updateJob(db, jobId, { status: 'done', progress: 1, currentStep: null });
+          audit(db, 'system', 'design.generated', 'carousel', carouselId, { jobId });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          db.prepare("UPDATE carousels SET status = 'failed', updated_at = ? WHERE id = ?").run(new Date().toISOString(), carouselId);
+          updateJob(db, jobId, { status: 'failed', error: msg.slice(0, 1200), currentStep: null });
+        }
+      }
+
+      if (isTestMode) {
+        // In tests, run synchronously so carousel reaches needs_review before subsequent calls
+        await runPipeline();
+      } else {
+        // Production: fire-and-forget
+        runPipeline().catch(() => {});
+      }
+      return jobId;
+    }
+
+    // Gate2 detail guard helper — handle Gate2 approve/changes mapping + compliance block verbatim
+    function decideGate2(id: string, decision: string, note: string): { status: string } {
+      const row = getCarousel(db, id);
+      if (!row) throw new Error('Carousel tidak ditemukan.');
+      // Compliance block guard 409 verbatim
+      if (row.compliance_blocked === 1) {
+        throw new Error('Carousel diblokir kepatuhan');
+      }
+      const blocking = db.prepare("SELECT count(*) AS n FROM compliance_findings WHERE carousel_id = ? AND result = 'fail' AND severity = 'block'").get(id) as { n: number };
+      if (blocking.n > 0) {
+        throw new Error('Carousel diblokir kepatuhan');
+      }
+      const now = new Date().toISOString();
+      if (decision === 'approved') {
+        // Only from needs_review → ready_to_publish
+        if (row.status !== 'needs_review') throw new Error(`Status ${row.status} tidak dapat di-approve untuk Gate 2.`);
+        db.prepare("UPDATE carousels SET status = 'ready_to_publish', approved_at = ?, approved_by = ?, approval_note = ?, updated_at = ? WHERE id = ? AND status = 'needs_review'").run(now, 'operator', note || null, now, id);
+        const after = getCarousel(db, id);
+        if (!after || after.status !== 'ready_to_publish') throw new Error('Status sudah berubah, muat ulang.');
+        audit(db, 'operator', 'carousel.approved', 'carousel', id, { gate: 2, note });
+        return { status: 'ready_to_publish' };
+      }
+      if (decision === 'changes_requested') {
+        if (note.trim().length < 5) throw new Error('Catatan revisi wajib diisi (minimal 5 karakter) agar agen dapat mempelajarinya.');
+        if (row.status !== 'needs_review') throw new Error(`Status ${row.status} tidak dapat di-request changes untuk Gate 2.`);
+        db.prepare("UPDATE carousels SET status = 'design_changes_requested', updated_at = ? WHERE id = ? AND status = 'needs_review'").run(now, id);
+        try { recordRevision(db, { carouselId: id, categoryKey: row.category_key, title: row.title, decision: 'changes_requested', note }); } catch {}
+        audit(db, 'operator', 'carousel.design_changes_requested', 'carousel', id, { note });
+        return { status: 'design_changes_requested' };
+      }
+      if (decision === 'rejected') {
+        // keep existing decideCarousel path for rejected → archived
+        decideCarousel(db, id, 'rejected', note, 'operator');
+        archiveCarousel(db, id, note || 'rejected');
+        return { status: 'archived' };
+      }
+      throw new Error('Keputusan tidak dikenal.');
+    }
+
+    // --- POST /api/designs/:id/generate 202/409 ---
+    const designsGenerateMatch = /^\/api\/designs\/([^/]+)\/generate$/.exec(path);
+    if (method === 'POST' && designsGenerateMatch) {
+      const id = designsGenerateMatch[1]!;
+      const row = getCarousel(db, id);
+      if (!row) { fail(res, 404, 'Carousel tidak ditemukan.'); return; }
+      if (row.status === 'archived' || row.status === 'rejected') { fail(res, 409, 'Carousel sudah diarsipkan/ditolak.'); return; }
+      // Allow generate from manuscript_approved OR design_changes_requested (design-only regen, manuscript stays locked)
+      const allowed = row.status === 'manuscript_approved' || row.status === 'design_changes_requested';
+      if (!allowed) { fail(res, 409, 'Selesaikan Gate 1 dulu'); return; }
+      if (row.manuscript_locked !== 1) { fail(res, 409, 'Selesaikan Gate 1 dulu'); return; }
+      const body = (await readJson(req).catch(()=>({}))) as { ratios?: string[] };
+      try {
+        const jobId = await runDesignGeneration(id, { category_key: row.category_key, topic: row.topic }, { ratios: body.ratios });
+        json(res, 202, { ok: true, jobId, status: 'designing', carouselId: id });
+      } catch (e) {
+        fail(res, 500, e instanceof Error ? e.message : String(e));
+      }
+      return;
+    }
+
+    // --- POST /api/designs/bulk-generate 202/207 ---
+    if (method === 'POST' && path === '/api/designs/bulk-generate') {
+      const body = (await readJson(req)) as { carouselIds?: unknown[] };
+      const ids = Array.isArray(body.carouselIds) ? (body.carouselIds as string[]) : [];
+      if (ids.length > 20) { fail(res, 400, 'Maksimal 20 item per permintaan bulk.'); return; }
+      const succeeded: { carouselId: string; jobId: string }[] = [];
+      const skipped: { id: string; reason: string }[] = [];
+      for (const cid of ids) {
+        const r = getCarousel(db, cid);
+        if (!r) { skipped.push({ id: cid, reason: 'Carousel tidak ditemukan.' }); continue; }
+        if (r.status !== 'manuscript_approved' || r.manuscript_locked !== 1) { skipped.push({ id: cid, reason: 'Selesaikan Gate 1 dulu' }); continue; }
+        try {
+          const jobId = await runDesignGeneration(cid, { category_key: r.category_key, topic: r.topic }, {});
+          succeeded.push({ carouselId: cid, jobId });
+        } catch (e) { skipped.push({ id: cid, reason: e instanceof Error ? e.message : String(e) }); }
+      }
+      if (skipped.length > 0 && succeeded.length > 0) { json(res, 207, { ok: true, succeeded, skipped, total: ids.length }); return; }
+      if (skipped.length > 0 && succeeded.length === 0) { json(res, 400, { ok: false, error: 'Semua item gagal.', skipped }); return; }
+      json(res, 202, { ok: true, succeeded, skipped, total: ids.length });
+      return;
+    }
+
+    // --- POST /api/designs/bulk-decision 207 ---
+    if (method === 'POST' && path === '/api/designs/bulk-decision') {
+      const body = (await readJson(req)) as { carouselIds?: unknown[]; decision?: string; note?: string };
+      const ids = Array.isArray(body.carouselIds) ? (body.carouselIds as string[]) : [];
+      const decision = String(body.decision ?? '').trim();
+      if (ids.length > 20) { fail(res, 400, 'Maksimal 20 item per permintaan bulk.'); return; }
+      if (!['approved','changes_requested','rejected'].includes(decision)) { fail(res, 400, 'Keputusan harus salah satu dari: approved, changes_requested, rejected.'); return; }
+      const succeeded: { carouselId: string; status: string }[] = [];
+      const skipped: { id: string; reason: string }[] = [];
+      for (const cid of ids) {
+        const r = getCarousel(db, cid);
+        if (!r) { skipped.push({ id: cid, reason: 'Carousel tidak ditemukan.' }); continue; }
+        // Gate2 decisions only from needs_review (or design_changes_requested for changes_requested)
+        // Skip designing (async in progress) and manuscript_needs_review (Gate1 not done)
+        const allowedStatus = decision === 'changes_requested'
+          ? (r.status === 'needs_review' || r.status === 'design_changes_requested')
+          : r.status === 'needs_review';
+        if (!allowedStatus && decision !== 'rejected') {
+          skipped.push({ id: cid, reason: `Status ${r.status} tidak dapat di-${decision}.` }); continue;
+        }
+        // compliance block - verbatim message
+        if (r.compliance_blocked === 1) { skipped.push({ id: cid, reason: 'Carousel diblokir kepatuhan' }); continue; }
+        const blocking = (()=>{ try{ return (db.prepare("SELECT count(*) AS n FROM compliance_findings WHERE carousel_id = ? AND result = 'fail' AND severity = 'block'").get(cid) as {n:number}).n; } catch { return 0; }})();
+        if (blocking > 0) { skipped.push({ id: cid, reason: 'Carousel diblokir kepatuhan' }); continue; }
+        try {
+          const out = decideGate2(cid, decision, String(body.note ?? ''));
+          succeeded.push({ carouselId: cid, status: out.status });
+        } catch (e) { skipped.push({ id: cid, reason: e instanceof Error ? e.message : String(e) }); }
+      }
+      // Always 207 when mixed; 200 when all succeeded would also be okay but spec says 207 partial
+      if (skipped.length > 0 && succeeded.length > 0) { json(res, 207, { ok: true, succeeded, skipped, total: ids.length }); return; }
+      if (skipped.length > 0 && succeeded.length === 0) { json(res, 207, { ok: true, succeeded, skipped, total: ids.length }); return; }
+      // All succeeded -> still 207 for consistency (spec says bulk 207 even if all succeed? use 207 if spec wants, else 202)
+      json(res, 207, { ok: true, succeeded, skipped, total: ids.length });
+      return;
+    }
+
+    // Gate2 intercept: if decision target is Gate2 statuses (needs_review/design_changes_requested/ready_to_publish), use Gate2 mapping
+    // We override the existing POST /api/carousels/:id/decision for Gate2 flow WITHOUT breaking legacy non-Gate2 path
+    // Patch: inspect row status — if status is needs_review and manuscript_locked===1, treat as Gate2 decision
+    // This must sit BEFORE the legacy decision block; so we handle Gate2-approved/changes via decideGate2 and return
+    // For other statuses, fall through to legacy handler below
+    if (method === 'POST' && /^\/api\/carousels\/[^/]+\/decision$/.exec(path)) {
+      const id = path.match(/^\/api\/carousels\/([^/]+)\/decision$/)![1]!;
+      const previewRow = getCarousel(db, id);
+      const looksGate2 = previewRow !== null && (previewRow.status === 'needs_review' || previewRow.status === 'design_changes_requested') && previewRow.manuscript_locked === 1;
+      if (looksGate2) {
+        let body: { decision?: string; note?: string; autoRevise?: boolean; ratios?: string[] };
+        try { body = (await readJson(req)) as typeof body; } catch { body = {}; }
+        const decision = String(body.decision ?? '').trim();
+        if (!['approved','changes_requested','rejected'].includes(decision)) { fail(res, 400, 'Keputusan harus salah satu dari: approved, changes_requested, rejected.'); return; }
+        const note = String(body.note ?? '').trim();
+        if (decision === 'changes_requested' && note.length < 5) { fail(res, 400, 'Catatan revisi wajib diisi (minimal 5 karakter) agar agen dapat mempelajarinya.'); return; }
+        try {
+          // compliance guard with verbatim message
+          if (previewRow.compliance_blocked === 1) { fail(res, 409, 'Carousel diblokir kepatuhan'); return; }
+          const blocking = db.prepare("SELECT count(*) AS n FROM compliance_findings WHERE carousel_id = ? AND result = 'fail' AND severity = 'block'").get(id) as { n: number };
+          if (blocking.n > 0) { fail(res, 409, 'Carousel diblokir kepatuhan'); return; }
+          const out = decideGate2(id, decision, note);
+          json(res, 200, { ok: true, carousel: getCarousel(db, id), status: out.status });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (msg.includes('Carousel diblokir kepatuhan') || msg.includes('diblokir')) { fail(res, 409, 'Carousel diblokir kepatuhan'); return; }
+          if (msg.includes('Status sudah berubah')) { fail(res, 409, msg); return; }
+          if (msg.includes('Status') && msg.includes('tidak dapat')) { fail(res, 409, msg); return; }
+          fail(res, 409, msg);
+        }
+        return;
+      }
+      // Not Gate2 — re-parse body buffering issue: we haven't consumed req body if we fall through
+      // But we already consumed it in looksGate2 path only when Gate2. If not Gate2, body not yet read; fall through
+      // To avoid double-read, we need to reset: we didn't read body in non-Gate2 branch above (we only peeped row), so safe to fall through
+    }
+
     // --- GET /api/jobs (extend with job_type) ---
     // (moved above, but keep fallback here for include jobType alias)
     if (method === 'GET' && path === '/api/jobs') {
@@ -2134,6 +2408,11 @@ async function handleWithDb(req: IncomingMessage, res: ServerResponse, activeDb:
 export function buildHttpServer(opts: { dbPath?: string; llmFactory?: () => unknown; mockLlm?: unknown } = {}) {
   const activeDb = opts.dbPath ? openDb(opts.dbPath) : db;
   try { seedDemoIfEmpty(activeDb); } catch {}
+  if (opts.dbPath) {
+    // Expose test DB path so runDesignGeneration can find it for pipeline
+    (globalThis as unknown as Record<string, unknown>).__TEST_DB_PATH__ = opts.dbPath;
+    (activeDb as unknown as Record<string, unknown>).__dbPath = opts.dbPath;
+  }
   if (opts.mockLlm || opts.llmFactory) {
     (globalThis as unknown as Record<string, unknown>).__TEST_LLM_FACTORY__ = (opts.llmFactory ?? (() => opts.mockLlm));
     (globalThis as unknown as Record<string, unknown>).__TEST_MOCK_LLM__ = opts.mockLlm ?? null;

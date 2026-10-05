@@ -1,39 +1,40 @@
-﻿{
-    "name":  "propdesk-ai",
-    "version":  "0.1.0",
-    "private":  true,
-    "type":  "module",
-    "description":  "PropDesk AI â€” AI Social Media Agency OS untuk niche trading propfirm",
-    "engines":  {
-                    "node":  "\u003e=24.0.0"
-                },
-    "scripts":  {
-                    "probe:models":  "node packages/llm/probe-models.mjs",
-                    "seed":  "node packages/shared/seed.ts",
-                    "test":  "node --test \"tests/**/*.test.ts\"",
-                    "test:unit":  "node --test \"tests/unit/*.test.ts\"",
-                    "test:integration":  "node --test \"tests/integration/*.test.ts\"",
-                    "llm:smoke":  "node packages/llm/smoke.ts",
-                    "studio":  "node packages/studio/server.ts",
-                    "carousel":  "node packages/cli/generate.ts",
-                    "carousel:demo":  "node packages/cli/generate.ts --demo",
-                    "carousel:all":  "node packages/cli/generate.ts --all",
-                    "render:check":  "node packages/renderer/check.ts",
-                    "output:clean":  "node packages/cli/clean-output.ts",
-                    "typecheck":  "tsc --noEmit",
-                    "check:budget":  "node packages/renderer/check-budget.ts",
-                    "studio:import":  "node packages/studio/import-output.ts",
-                    "studio:check":  "node packages/studio/check-ui.ts",
-                    "check:themes":  "node packages/renderer/check-themes.ts",
-                    "news:probe":  "node packages/news/probe.ts"
-                },
-    "//dependencies":  "Hanya playwright-core yang dibutuhkan runtime. TypeScript, @types/node, dan zod dipakai untuk typecheck/validasi; schema juga divalidasi mandiri agar runtime tetap bisa jalan tanpa dependensi.",
-    "dependencies":  {
-                         "playwright-core":  "^1.56.0"
-                     },
-    "devDependencies":  {
-                            "@types/node":  "^24.7.0",
-                            "typescript":  "^5.9.0",
-                            "zod":  "^3.25.0"
-                        }
+{
+    "name": "propdesk-ai",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "description": "PropDesk AI â€” AI Social Media Agency OS untuk niche trading propfirm",
+    "engines": {
+        "node": ">=24.0.0"
+    },
+    "scripts": {
+        "probe:models": "node packages/llm/probe-models.mjs",
+        "seed": "node packages/shared/seed.ts",
+        "test": "node --test \"tests/**/*.test.ts\"",
+        "test:unit": "node --test \"tests/unit/*.test.ts\"",
+        "test:integration": "node --test \"tests/integration/*.test.ts\"",
+        "llm:smoke": "node packages/llm/smoke.ts",
+        "studio": "node packages/studio/server.ts",
+        "carousel": "node packages/cli/generate.ts",
+        "carousel:demo": "node packages/cli/generate.ts --demo",
+        "carousel:all": "node packages/cli/generate.ts --all",
+        "render:check": "node packages/renderer/check.ts",
+        "output:clean": "node packages/cli/clean-output.ts",
+        "typecheck": "tsc --noEmit",
+        "check:budget": "node packages/renderer/check-budget.ts",
+        "studio:import": "node packages/studio/import-output.ts",
+        "studio:check": "node packages/studio/check-ui.ts",
+        "check:themes": "node packages/renderer/check-themes.ts",
+        "news:probe": "node packages/news/probe.ts"
+    },
+    "//dependencies": "Hanya playwright-core yang dibutuhkan runtime. TypeScript, @types/node, dan zod dipakai untuk typecheck/validasi; schema juga divalidasi mandiri agar runtime tetap bisa jalan tanpa dependensi.",
+    "dependencies": {
+        "playwright-core": "^1.56.0"
+    },
+    "devDependencies": {
+        "@playwright/test": "^1.63.0",
+        "@types/node": "^24.7.0",
+        "typescript": "^5.9.0",
+        "zod": "^3.25.0"
+    }
 }
